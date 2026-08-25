@@ -1,0 +1,94 @@
+{
+  "situations": [
+    {
+      "slug": "home-safety",
+      "title": "I don't feel safe at home",
+      "description": "For situations involving abuse, threats, or fear at home.",
+      "risk_level": "high_risk",
+      "rights_topics": ["domestic-violence-rights"]
+    },
+    {
+      "slug": "land-property",
+      "title": "Land or property problem",
+      "description": "For questions about property rights, especially after separation.",
+      "risk_level": "standard",
+      "rights_topics": ["matrimonial-property-rights"]
+    }
+  ],
+  "rights_topics": [
+    {
+      "slug": "domestic-violence-rights",
+      "title": "Domestic Violence & Your Rights",
+      "summary": "The Domestic Violence Act protects you from physical, sexual, economic and emotional abuse by a spouse, partner or family member. You can apply for a protection order from a Magistrate's Court without needing a lawyer. Police must record your complaint - they cannot turn you away as a family matter.",
+      "source_name": "Domestic Violence Act, 2010",
+      "source_url": "",
+      "verification_status": "review_required",
+      "support_services": [
+        "Sauti 116 - Child & GBV Helpline",
+        "Uganda Police GBV Toll-Free Helpline"
+      ],
+      "action_steps": [
+        {
+          "order": 1,
+          "title": "If in immediate danger, move somewhere safer",
+          "description": "If you can safely do so, move to a safer location before anything else.",
+          "is_safety_critical": true
+        },
+        {
+          "order": 2,
+          "title": "Call a free helpline",
+          "description": "Sauti 116 or the Police GBV line are both free and available 24/7.",
+          "is_safety_critical": true
+        },
+        {
+          "order": 3,
+          "title": "Ask for a PF3 medical form if injured",
+          "description": "This form is free from a government health centre and helps document your case.",
+          "is_safety_critical": false
+        },
+        {
+          "order": 4,
+          "title": "Apply for a protection order",
+          "description": "You can apply at a Magistrate's Court without needing a lawyer.",
+          "is_safety_critical": false
+        }
+      ],
+      "safety_responses": [
+        {
+          "trigger_key": "immediate_danger",
+          "message": "Your safety matters. You are not alone, and this is not your fault. If you are in immediate danger, consider moving somewhere safer if you can. Free, trusted support: Sauti 116, or the Police GBV line on 0800199195."
+        }
+      ]
+    },
+    {
+      "slug": "matrimonial-property-rights",
+      "title": "Property Rights After Separation",
+      "summary": "Under the Succession Act, a wife - including in a customary marriage - generally has a right to a share of matrimonial property acquired during the marriage, even if it is registered in the husband's name alone.",
+      "source_name": "Succession Act",
+      "source_url": "",
+      "verification_status": "review_required",
+      "support_services": ["FIDA Uganda"],
+      "action_steps": [
+        {
+          "order": 1,
+          "title": "Do not sign away property rights",
+          "description": "Avoid signing any documents about the property before getting advice.",
+          "is_safety_critical": false
+        },
+        {
+          "order": 2,
+          "title": "Contact a legal aid clinic",
+          "description": "FIDA Uganda offers free guidance on matrimonial property matters.",
+          "is_safety_critical": false
+        },
+        {
+          "order": 3,
+          "title": "Keep property documents safe",
+          "description": "Hold on to any paperwork related to the property in a safe place.",
+          "is_safety_critical": false
+        }
+      ],
+      "safety_responses": []
+    }
+  ]
+}

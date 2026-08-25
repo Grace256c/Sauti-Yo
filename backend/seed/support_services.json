@@ -1,0 +1,35 @@
+[
+  {
+    "name": "Sauti 116 - Child & GBV Helpline",
+    "service_type": "helpline",
+    "description": "Free, 24/7, all networks. Run by the Ministry of Gender, Labour & Social Development with UNICEF. Handles child abuse and GBV cases.",
+    "phone_number": "116",
+    "availability": "24/7",
+    "coverage": "National",
+    "verification_status": "review_required",
+    "is_emergency_service": true,
+    "is_active": true
+  },
+  {
+    "name": "Uganda Police GBV Toll-Free Helpline",
+    "service_type": "police",
+    "description": "Department of Child & Family Protection, Police HQ Naguru.",
+    "phone_number": "0800199195",
+    "availability": "24/7",
+    "coverage": "National",
+    "verification_status": "review_required",
+    "is_emergency_service": true,
+    "is_active": true
+  },
+  {
+    "name": "FIDA Uganda",
+    "service_type": "legal_aid",
+    "description": "Free legal advice for women, provided by the Uganda Women Lawyers Association. Verify current number before real deployment.",
+    "phone_number": "0800132132",
+    "availability": "Business hours",
+    "coverage": "National",
+    "verification_status": "review_required",
+    "is_emergency_service": false,
+    "is_active": true
+  }
+]
