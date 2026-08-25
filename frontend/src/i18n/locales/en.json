@@ -1,0 +1,19 @@
+{
+  "brand": {
+    "name": "Sauti Yo",
+    "tagline": "Know. Act. Be Heard."
+  },
+  "nav": {
+    "home": "Home",
+    "rights": "Know Your Rights",
+    "support": "Find Support",
+    "community": "Community Voice",
+    "partner": "Partner Portal"
+  },
+  "common": {
+    "language": "Language",
+    "back": "Back",
+    "continue": "Continue",
+    "learnMore": "Learn more"
+  }
+}
