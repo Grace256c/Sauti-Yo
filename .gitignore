@@ -1,0 +1,44 @@
+# ==============================
+# SAUTI YO
+# ==============================
+
+# Environment variables / secrets
+.env
+.env.local
+.env.*.local
+
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Django
+staticfiles/
+media/
+
+# Node / React
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Credentials / private keys
+*.pem
+*.key
+credentials.json
