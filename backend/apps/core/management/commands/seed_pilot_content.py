@@ -10,6 +10,55 @@ from apps.rights.models import (
 )
 from apps.support.models import SupportService
 
+SUPPORT_SERVICES = {
+    "legal_aid": {
+        "name": "Uganda Law Society Legal Aid Project",
+        "service_type": "Legal Aid",
+        "description": (
+            "Free legal advice, representation, and referrals for "
+            "the poor, indigent, and vulnerable."
+        ),
+        "phone_number": "0800100150",
+        "coverage": "National",
+        "is_emergency_service": False,
+    },
+    "police_gbv": {
+        "name": "Uganda Police GBV Helpline",
+        "service_type": "Emergency / GBV Response",
+        "description": (
+            "Toll-free helpline run by the Uganda Police Force "
+            "Department of Child and Family Protection for "
+            "reporting gender-based violence and getting help."
+        ),
+        "phone_number": "0800199195",
+        "coverage": "National",
+        "is_emergency_service": True,
+    },
+    "mifumi": {
+        "name": "MIFUMI Domestic Violence Helpline",
+        "service_type": "Counselling & Shelter",
+        "description": (
+            "Confidential helpline and support services for "
+            "women, children, and youth affected by domestic "
+            "violence."
+        ),
+        "phone_number": "0800200250",
+        "coverage": "National",
+        "is_emergency_service": False,
+    },
+    "fida": {
+        "name": "FIDA-Uganda",
+        "service_type": "Legal Aid",
+        "description": (
+            "Free legal aid and support from the Uganda "
+            "Association of Women Lawyers."
+        ),
+        "phone_number": "0800111511",
+        "coverage": "National",
+        "is_emergency_service": False,
+    },
+}
+
 
 class Command(BaseCommand):
     help = (
@@ -37,14 +86,15 @@ class Command(BaseCommand):
             )
         )
 
-    def _support_service(self, **kwargs):
-        name = kwargs.pop("name")
+    def _support_service(self, key):
+        data = dict(SUPPORT_SERVICES[key])
+        name = data.pop("name")
         service, _ = SupportService.objects.update_or_create(
             name=name,
             defaults={
                 "verification_status": "review_required",
                 "is_active": True,
-                **kwargs,
+                **data,
             },
         )
         return service
@@ -66,7 +116,7 @@ class Command(BaseCommand):
         situation, _ = Situation.objects.update_or_create(
             slug="problem-at-work",
             defaults={
-                "title": "I have a problem at work",
+                "title": "Problem at work",
                 "description": (
                     "Understand your rights and explore practical "
                     "next steps for a workplace problem."
@@ -136,24 +186,14 @@ class Command(BaseCommand):
             ],
         )
 
-        legal_aid = self._support_service(
-            name="Uganda Law Society Legal Aid Project",
-            service_type="Legal Aid",
-            description=(
-                "Free legal advice, representation, and referrals for "
-                "the poor, indigent, and vulnerable."
-            ),
-            phone_number="0800100150",
-            coverage="National",
-            is_emergency_service=False,
-        )
+        legal_aid = self._support_service("legal_aid")
         rights_topic.support_services.add(legal_aid)
 
     def _seed_eviction(self):
         situation, _ = Situation.objects.update_or_create(
             slug="facing-eviction",
             defaults={
-                "title": "I'm facing eviction or a housing problem",
+                "title": "Eviction or housing problem",
                 "description": (
                     "Understand your rights as a tenant, what a lawful "
                     "eviction looks like, and what to do if you're "
@@ -235,24 +275,14 @@ class Command(BaseCommand):
             ],
         )
 
-        legal_aid = self._support_service(
-            name="Uganda Law Society Legal Aid Project",
-            service_type="Legal Aid",
-            description=(
-                "Free legal advice, representation, and referrals for "
-                "the poor, indigent, and vulnerable."
-            ),
-            phone_number="0800100150",
-            coverage="National",
-            is_emergency_service=False,
-        )
+        legal_aid = self._support_service("legal_aid")
         rights_topic.support_services.add(legal_aid)
 
     def _seed_domestic_violence(self):
         situation, _ = Situation.objects.update_or_create(
             slug="domestic-violence",
             defaults={
-                "title": "I'm experiencing domestic violence",
+                "title": "Domestic violence",
                 "description": (
                     "Information on your legal protections and how to "
                     "get immediate help if you or someone you know is "
@@ -347,48 +377,16 @@ class Command(BaseCommand):
             ],
         )
 
-        police_gbv = self._support_service(
-            name="Uganda Police GBV Helpline",
-            service_type="Emergency / GBV Response",
-            description=(
-                "Toll-free helpline run by the Uganda Police Force "
-                "Department of Child and Family Protection for "
-                "reporting gender-based violence and getting help."
-            ),
-            phone_number="0800199195",
-            coverage="National",
-            is_emergency_service=True,
-        )
-        mifumi = self._support_service(
-            name="MIFUMI Domestic Violence Helpline",
-            service_type="Counselling & Shelter",
-            description=(
-                "Confidential helpline and support services for "
-                "women, children, and youth affected by domestic "
-                "violence."
-            ),
-            phone_number="0800200250",
-            coverage="National",
-            is_emergency_service=False,
-        )
-        fida = self._support_service(
-            name="FIDA-Uganda",
-            service_type="Legal Aid",
-            description=(
-                "Free legal aid and support from the Uganda "
-                "Association of Women Lawyers."
-            ),
-            phone_number="0800111511",
-            coverage="National",
-            is_emergency_service=False,
-        )
+        police_gbv = self._support_service("police_gbv")
+        mifumi = self._support_service("mifumi")
+        fida = self._support_service("fida")
         rights_topic.support_services.add(police_gbv, mifumi, fida)
 
     def _seed_sexual_harassment(self):
         situation, _ = Situation.objects.update_or_create(
             slug="sexual-harassment",
             defaults={
-                "title": "I'm experiencing sexual harassment",
+                "title": "Sexual harassment",
                 "description": (
                     "Information on your rights if you're facing "
                     "sexual harassment, particularly at work, and how "
@@ -483,27 +481,8 @@ class Command(BaseCommand):
             ],
         )
 
-        fida = self._support_service(
-            name="FIDA-Uganda",
-            service_type="Legal Aid",
-            description=(
-                "Free legal aid and support from the Uganda "
-                "Association of Women Lawyers."
-            ),
-            phone_number="0800111511",
-            coverage="National",
-            is_emergency_service=False,
-        )
-        legal_aid = self._support_service(
-            name="Uganda Law Society Legal Aid Project",
-            service_type="Legal Aid",
-            description=(
-                "Free legal advice, representation, and referrals for "
-                "the poor, indigent, and vulnerable."
-            ),
-            phone_number="0800100150",
-            coverage="National",
-            is_emergency_service=False,
-        )
-        rights_topic.support_services.add(fida, legal_aid)
+        fida = self._support_service("fida")
+        legal_aid = self._support_service("legal_aid")
+        police_gbv = self._support_service("police_gbv")
+        rights_topic.support_services.add(fida, legal_aid, police_gbv)
 
