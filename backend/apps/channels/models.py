@@ -1,3 +1,31 @@
 from django.db import models
 
-# Create your models here.
+
+class UssdSession(models.Model):
+    LANGUAGE_CHOICES = [
+        ("en", "English"),
+        ("lg", "Luganda"),
+        ("sw", "Kiswahili"),
+        ("nyn", "Runyankole"),
+    ]
+
+    session_id = models.CharField(max_length=100, unique=True)
+    phone_number = models.CharField(max_length=50)
+
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        blank=True,
+    )
+
+    state = models.CharField(max_length=50, default="language_select")
+
+    context = models.JSONField(default=dict, blank=True)
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.session_id} ({self.state})"
