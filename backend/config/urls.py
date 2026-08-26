@@ -34,4 +34,9 @@ urlpatterns = [
         "api/content/",
         include("apps.content.urls"),
     ),
+
+    path(
+        "api/channels/",
+        include("apps.channels.urls"),
+    ),
 ]
