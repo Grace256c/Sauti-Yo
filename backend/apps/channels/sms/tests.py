@@ -5,6 +5,13 @@ from django.test import TestCase
 
 from apps.channels import africastalking_client
 from apps.channels.models import SmsContext
+from apps.channels.sms.keywords import (
+    match_danger,
+    match_discreet,
+    match_followup,
+    match_help,
+    match_situation,
+)
 
 
 class SendSmsTests(TestCase):
@@ -57,15 +64,6 @@ class SmsContextModelTests(TestCase):
             SmsContext.objects.create(
                 phone_number="+256700000000", last_situation_slug="work"
             )
-
-
-from apps.channels.sms.keywords import (
-    match_danger,
-    match_discreet,
-    match_followup,
-    match_help,
-    match_situation,
-)
 
 
 class KeywordMatchingTests(TestCase):
