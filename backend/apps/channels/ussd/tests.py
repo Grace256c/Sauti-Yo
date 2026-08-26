@@ -156,12 +156,31 @@ class LanguageSelectTests(TestCase):
         self.assertIn("1. English", text)
         self.assertFalse(ended)
 
-    def test_transition_sets_language_and_moves_to_main_menu(self):
+    def test_render_shows_unavailable_notice_when_flagged(self):
+        session = UssdSession(
+            state="language_select",
+            language="",
+            context={"unavailable_notice": True},
+        )
+        text, ended = menus.render_language_select(session)
+        self.assertIn("not available yet", text)
+        self.assertIn("1. English", text)
+        self.assertFalse(ended)
+
+    def test_transition_english_sets_language_and_moves_to_main_menu(self):
         session = UssdSession(state="language_select", language="", context={})
-        next_state, context = menus.transition_language_select(session, "2")
+        next_state, context = menus.transition_language_select(session, "1")
         self.assertEqual(next_state, "main_menu")
-        self.assertEqual(session.language, "lg")
+        self.assertEqual(session.language, "en")
         self.assertEqual(context, {})
+
+    def test_transition_unavailable_language_stays_on_picker_with_notice(self):
+        for digit in ("2", "3", "4"):
+            session = UssdSession(state="language_select", language="", context={})
+            next_state, context = menus.transition_language_select(session, digit)
+            self.assertEqual(next_state, "language_select")
+            self.assertEqual(context, {"unavailable_notice": True})
+            self.assertEqual(session.language, "")
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(state="language_select", language="", context={})
