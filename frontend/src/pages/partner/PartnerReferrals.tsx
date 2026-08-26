@@ -4,22 +4,43 @@ import {
   CheckCircle2,
   Clock3,
   Inbox,
+  LoaderCircle,
   Search,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  ApiError,
+} from "../../services/api";
+
+import {
+  getReferrals,
+} from "../../services/referrals";
+
+import type {
+  Referral,
+} from "../../services/referrals";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 type ReferralStatus =
   | "new"
   | "reviewing"
   | "accepted"
-  | "in-progress"
+  | "in_progress"
   | "completed"
   | "closed";
 
 type ReferralItem = {
-  id: string;
+  id: number;
   reference: string;
   category: string;
   supportType: string;
@@ -31,8 +52,14 @@ type ReferralItem = {
   summary: string;
 };
 
+/* =========================================================
+   OPTIONS
+========================================================= */
+
 const statusOptions: {
-  value: "all" | ReferralStatus;
+  value:
+    | "all"
+    | ReferralStatus;
   label: string;
 }[] = [
   {
@@ -52,7 +79,7 @@ const statusOptions: {
     label: "Accepted",
   },
   {
-    value: "in-progress",
+    value: "in_progress",
     label: "In progress",
   },
   {
@@ -65,35 +92,229 @@ const statusOptions: {
   },
 ];
 
-/*
- * Empty on purpose.
- *
- * Real referrals should come from the backend after:
- *
- * 1. citizen consent,
- * 2. successful partner matching,
- * 3. partner eligibility checks.
- */
-const referralItems: ReferralItem[] = [];
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function normalizeStatus(
+  status: string,
+): ReferralStatus {
+  switch (status) {
+    case "reviewing":
+      return "reviewing";
+
+    case "accepted":
+      return "accepted";
+
+    case "in_progress":
+    case "in-progress":
+      return "in_progress";
+
+    case "completed":
+      return "completed";
+
+    case "closed":
+      return "closed";
+
+    default:
+      return "new";
+  }
+}
+
+function formatDate(
+  value?: string,
+) {
+  if (!value) {
+    return "—";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleDateString(
+    undefined,
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    },
+  );
+}
+
+function referralToItem(
+  referral: Referral,
+): ReferralItem {
+  return {
+    id: referral.id,
+
+    reference:
+      referral.reference,
+
+    /*
+     * The current referral serializer exposes rights_topic
+     * as an ID rather than a nested topic title.
+     *
+     * Until we expand that serializer, this keeps the UI
+     * truthful rather than inventing category names.
+     */
+    category:
+      referral.rights_topic
+        ? `Rights topic #${referral.rights_topic}`
+        : "General support",
+
+    supportType:
+      referral.preferred_support_channel
+        ? "Matched support"
+        : "General support",
+
+    district:
+      referral.district ||
+      "District not specified",
+
+    language:
+      referral.language ||
+      "Language not specified",
+
+    preferredChannel:
+      referral.preferred_support_channel ||
+      "Channel not specified",
+
+    status:
+      normalizeStatus(
+        referral.status,
+      ),
+
+    createdAt:
+      formatDate(
+        referral.created_at,
+      ),
+
+    summary:
+      referral.summary ||
+      "No referral summary provided.",
+  };
+}
+
+/* =========================================================
+   PAGE
+========================================================= */
 
 export default function PartnerReferrals() {
-  const [search, setSearch] =
+  const [
+    referrals,
+    setReferrals,
+  ] =
+    useState<ReferralItem[]>(
+      [],
+    );
+
+  const [
+    search,
+    setSearch,
+  ] =
     useState("");
 
-  const [statusFilter, setStatusFilter] =
-    useState<"all" | ReferralStatus>(
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] =
+    useState<
+      "all" | ReferralStatus
+    >(
       "all",
     );
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
+
+  const [
+    error,
+    setError,
+  ] =
+    useState("");
+
+  /* =======================================================
+     LOAD FROM DJANGO
+  ======================================================= */
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadReferrals() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const data =
+          await getReferrals();
+
+        if (!active) {
+          return;
+        }
+
+        setReferrals(
+          data.map(
+            referralToItem,
+          ),
+        );
+      } catch (caughtError) {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caughtError instanceof
+          ApiError
+        ) {
+          setError(
+            caughtError.message,
+          );
+        } else {
+          setError(
+            "Unable to load referrals.",
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadReferrals();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /* =======================================================
+     FILTERING
+  ======================================================= */
 
   const filteredReferrals =
     useMemo(() => {
       const query =
-        search.trim().toLowerCase();
+        search
+          .trim()
+          .toLowerCase();
 
-      return referralItems.filter(
+      return referrals.filter(
         (referral) => {
           const matchesStatus =
-            statusFilter === "all" ||
+            statusFilter ===
+              "all" ||
             referral.status ===
               statusFilter;
 
@@ -110,6 +331,9 @@ export default function PartnerReferrals() {
               .includes(query) ||
             referral.district
               .toLowerCase()
+              .includes(query) ||
+            referral.language
+              .toLowerCase()
               .includes(query);
 
           return (
@@ -119,47 +343,74 @@ export default function PartnerReferrals() {
         },
       );
     }, [
+      referrals,
       search,
       statusFilter,
     ]);
 
-  const counts = useMemo(() => {
-    return {
-      new: referralItems.filter(
-        (item) =>
-          item.status === "new",
-      ).length,
+  /* =======================================================
+     COUNTS
+  ======================================================= */
 
-      reviewing:
-        referralItems.filter(
-          (item) =>
-            item.status ===
-            "reviewing",
-        ).length,
+  const counts =
+    useMemo(() => {
+      return {
+        new:
+          referrals.filter(
+            (item) =>
+              item.status ===
+              "new",
+          ).length,
 
-      active:
-        referralItems.filter(
-          (item) =>
-            item.status ===
-              "accepted" ||
-            item.status ===
-              "in-progress",
-        ).length,
+        reviewing:
+          referrals.filter(
+            (item) =>
+              item.status ===
+              "reviewing",
+          ).length,
 
-      completed:
-        referralItems.filter(
-          (item) =>
-            item.status ===
-            "completed",
-        ).length,
-    };
-  }, []);
+        active:
+          referrals.filter(
+            (item) =>
+              item.status ===
+                "accepted" ||
+              item.status ===
+                "in_progress",
+          ).length,
+
+        completed:
+          referrals.filter(
+            (item) =>
+              item.status ===
+              "completed",
+          ).length,
+      };
+    }, [referrals]);
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[65vh] items-center justify-center px-5">
+        <div className="text-center">
+          <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-gold" />
+
+          <p className="mt-4 text-sm text-text-secondary">
+            Loading referrals...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
       {/* =====================================================
           PAGE HEADER
       ===================================================== */}
+
       <section className="border-b border-border bg-surface">
         <div className="px-5 py-8 sm:px-8 lg:px-10 lg:py-9 xl:px-12">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -186,7 +437,7 @@ export default function PartnerReferrals() {
               <ShieldCheck className="h-4 w-4 text-gold" />
 
               <span className="font-semibold text-text-primary">
-                Verification required
+                Partner referral workspace
               </span>
             </div>
           </div>
@@ -196,11 +447,26 @@ export default function PartnerReferrals() {
       {/* =====================================================
           BODY
       ===================================================== */}
+
       <div className="px-5 py-7 sm:px-8 lg:px-10 lg:py-8 xl:px-12">
         <div className="mx-auto max-w-7xl">
+
+          {/* ERROR */}
+
+          {error && (
+            <div className="mb-5 flex items-start gap-3 border border-danger/30 bg-danger/5 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+
+              <p className="text-sm leading-6 text-danger">
+                {error}
+              </p>
+            </div>
+          )}
+
           {/* =================================================
               REFERRAL SAFETY NOTE
           ================================================= */}
+
           <section className="border border-border bg-surface p-5 sm:p-6">
             <div className="flex items-start gap-4">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold">
@@ -238,6 +504,7 @@ export default function PartnerReferrals() {
           {/* =================================================
               SUMMARY
           ================================================= */}
+
           <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <ReferralStat
               label="New"
@@ -248,7 +515,9 @@ export default function PartnerReferrals() {
 
             <ReferralStat
               label="Reviewing"
-              value={counts.reviewing}
+              value={
+                counts.reviewing
+              }
               icon={Search}
               description="Under assessment"
             />
@@ -262,7 +531,9 @@ export default function PartnerReferrals() {
 
             <ReferralStat
               label="Completed"
-              value={counts.completed}
+              value={
+                counts.completed
+              }
               icon={CheckCircle2}
               description="Support completed"
             />
@@ -271,6 +542,7 @@ export default function PartnerReferrals() {
           {/* =================================================
               FILTERS
           ================================================= */}
+
           <section className="mt-5 border border-border bg-surface">
             <div className="grid gap-4 p-5 md:grid-cols-[1fr_auto] md:items-center sm:p-6">
               <div className="relative">
@@ -279,19 +551,26 @@ export default function PartnerReferrals() {
                 <input
                   type="search"
                   value={search}
-                  onChange={(event) =>
+                  onChange={(
+                    event,
+                  ) =>
                     setSearch(
-                      event.target.value,
+                      event.target
+                        .value,
                     )
                   }
-                  placeholder="Search by reference, category, support type or district"
+                  placeholder="Search by reference, category, support type, district or language"
                   className="min-h-12 w-full border border-border bg-background pl-11 pr-4 text-sm text-text-primary outline-none transition placeholder:text-text-secondary/60 focus:border-gold"
                 />
               </div>
 
               <select
-                value={statusFilter}
-                onChange={(event) =>
+                value={
+                  statusFilter
+                }
+                onChange={(
+                  event,
+                ) =>
                   setStatusFilter(
                     event.target
                       .value as
@@ -311,7 +590,9 @@ export default function PartnerReferrals() {
                         option.value
                       }
                     >
-                      {option.label}
+                      {
+                        option.label
+                      }
                     </option>
                   ),
                 )}
@@ -322,6 +603,7 @@ export default function PartnerReferrals() {
           {/* =================================================
               REFERRAL INBOX
           ================================================= */}
+
           <section className="mt-5 border border-border bg-surface">
             <div className="flex flex-col gap-3 border-b border-border p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
               <div>
@@ -362,7 +644,8 @@ export default function PartnerReferrals() {
               <EmptyReferralState
                 hasFilters={
                   search.trim() !== "" ||
-                  statusFilter !== "all"
+                  statusFilter !==
+                    "all"
                 }
               />
             )}
@@ -371,6 +654,7 @@ export default function PartnerReferrals() {
           {/* =================================================
               REFERRAL FLOW
           ================================================= */}
+
           <section className="mt-5 border border-border bg-surface">
             <div className="grid gap-8 p-6 sm:p-7 lg:grid-cols-[0.75fr_1.25fr] lg:items-center">
               <div>
@@ -411,6 +695,10 @@ export default function PartnerReferrals() {
     </>
   );
 }
+
+/* =========================================================
+   COMPONENTS
+========================================================= */
 
 function ReferralStat({
   label,
@@ -470,7 +758,9 @@ function ReferralRow({
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <p className="text-sm font-semibold text-text-primary">
-                {referral.reference}
+                {
+                  referral.reference
+                }
               </p>
 
               <ReferralStatusBadge
@@ -522,14 +812,14 @@ function ReferralRow({
           </div>
         </div>
 
-        <button
-          type="button"
+        <a
+          href={`/partner/referrals/${referral.id}`}
           className="inline-flex min-h-11 items-center justify-center gap-2 border border-border px-4 text-sm font-semibold text-text-primary transition hover:border-gold hover:text-gold"
         >
           Review referral
 
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-        </button>
+        </a>
       </div>
     </article>
   );
@@ -547,7 +837,7 @@ function ReferralStatusBadge({
     new: "New",
     reviewing: "Reviewing",
     accepted: "Accepted",
-    "in-progress":
+    in_progress:
       "In progress",
     completed: "Completed",
     closed: "Closed",
@@ -599,12 +889,12 @@ function EmptyReferralState({
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
 
             <p className="text-xs leading-5 text-text-secondary">
-              The portal should not
-              generate test citizen
-              cases automatically. Real
-              referrals will only appear
-              after the referral and
-              consent flow is connected.
+              Only real referrals
+              returned by the Sauti Yo
+              backend appear in this
+              inbox. The portal does not
+              generate sample citizen
+              cases automatically.
             </p>
           </div>
         )}
