@@ -45,11 +45,14 @@ class Command(BaseCommand):
             defaults={
                 "title": "Understanding your workplace rights",
                 "summary": (
-                    "Sauti Yo can help you understand the issue, "
-                    "review relevant rights information, and identify "
-                    "possible next steps."
+                    "Under the Employment Act, 2006, dismissal for "
+                    "misconduct requires your employer to prove the "
+                    "offence and give you a fair hearing first. "
+                    "Termination for other reasons only requires "
+                    "notice or pay in lieu. After 6 months of service, "
+                    "you may be entitled to severance pay."
                 ),
-                "source_name": "Demo content — verification required",
+                "source_name": "Employment Act, 2006 (Act 6 of 2006)",
                 "reviewed_by": "",
                 "verification_status": "review_required",
                 "is_active": True,
@@ -68,27 +71,29 @@ class Command(BaseCommand):
         steps = [
             (
                 1,
-                "Understand what happened",
-                "Identify the workplace issue and keep a clear "
-                "record of important details.",
+                "Write down what happened",
+                "Note the date, what was said or done, and keep any "
+                "written notice or messages from your employer.",
             ),
             (
                 2,
-                "Understand the relevant right",
-                "Review verified information that may apply to "
-                "your situation.",
+                "Check you were given a fair hearing",
+                "If you were dismissed for misconduct, you have the "
+                "right to know the accusation, defend yourself, and "
+                "appeal - your employer must follow this process.",
             ),
             (
                 3,
-                "Keep useful information",
-                "Where safe, keep relevant documents, dates, "
-                "messages, or other records.",
+                "Check your severance entitlement",
+                "If you've worked at least 6 months and were "
+                "terminated or unfairly dismissed, you may be "
+                "entitled to severance pay.",
             ),
             (
                 4,
-                "Choose a practical next step",
-                "Consider an appropriate next action or connect "
-                "with a verified support service.",
+                "Get free legal advice",
+                "The Uganda Law Society Legal Aid Project can help "
+                "you understand your options and next steps.",
             ),
         ]
 
@@ -145,9 +150,10 @@ class Command(BaseCommand):
                 "language": "en",
                 "channel": "sms",
                 "text": (
-                    "Sauti Yo: Understand your workplace issue, "
-                    "learn about relevant rights and find practical "
-                    "next steps."
+                    "Sauti Yo: Under the Employment Act, dismissal "
+                    "for misconduct requires a fair hearing and "
+                    "proof. Termination needs notice or pay in lieu. "
+                    "After 6 months, you may be owed severance pay."
                 ),
                 "is_verified": False,
             },
