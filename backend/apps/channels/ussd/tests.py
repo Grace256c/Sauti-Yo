@@ -59,3 +59,71 @@ class SessionHelperTests(TestCase):
 
         session.refresh_from_db()
         self.assertFalse(session.is_active)
+
+
+from apps.channels.ussd import menus
+from apps.content.models import ChannelContent
+
+
+class TextHelperTests(TestCase):
+    def test_truncate_returns_original_when_short(self):
+        self.assertEqual(menus.truncate("hello", 10), "hello")
+
+    def test_truncate_shortens_long_text_with_ellipsis(self):
+        result = menus.truncate("a" * 20, 10)
+        self.assertEqual(result, "a" * 7 + "...")
+        self.assertEqual(len(result), 10)
+
+    def test_chunk_text_splits_on_word_boundaries_within_budget(self):
+        text = " ".join(["word"] * 10)
+        chunks = menus.chunk_text(text, budget=14)
+        self.assertTrue(all(len(chunk) <= 14 for chunk in chunks))
+        self.assertEqual(" ".join(chunks), text)
+
+    def test_chunk_text_returns_single_chunk_for_short_text(self):
+        self.assertEqual(
+            menus.chunk_text("short text", budget=160), ["short text"]
+        )
+
+    def test_chunk_text_of_empty_string_returns_single_empty_chunk(self):
+        self.assertEqual(menus.chunk_text("", budget=160), [""])
+
+    def test_paginate_items_returns_page_and_has_more_flag(self):
+        items = list(range(12))
+        page_items, has_more = menus.paginate_items(items, page=0, page_size=5)
+        self.assertEqual(page_items, [0, 1, 2, 3, 4])
+        self.assertTrue(has_more)
+
+    def test_paginate_items_last_page_has_no_more(self):
+        items = list(range(12))
+        page_items, has_more = menus.paginate_items(items, page=2, page_size=5)
+        self.assertEqual(page_items, [10, 11])
+        self.assertFalse(has_more)
+
+
+class GetCopyTests(TestCase):
+    def test_falls_back_to_default_when_no_channel_content_row(self):
+        text = menus.get_copy("ussd.main_menu", "en")
+        self.assertEqual(text, menus.DEFAULT_COPY["ussd.main_menu"])
+
+    def test_prefers_channel_content_row_when_present(self):
+        ChannelContent.objects.create(
+            content_key="ussd.main_menu",
+            language="lg",
+            channel="ussd",
+            text="Ekika ky'obuyambi",
+            is_active=True,
+        )
+        text = menus.get_copy("ussd.main_menu", "lg")
+        self.assertEqual(text, "Ekika ky'obuyambi")
+
+    def test_ignores_inactive_channel_content_row(self):
+        ChannelContent.objects.create(
+            content_key="ussd.main_menu",
+            language="en",
+            channel="ussd",
+            text="Should not be used",
+            is_active=False,
+        )
+        text = menus.get_copy("ussd.main_menu", "en")
+        self.assertEqual(text, menus.DEFAULT_COPY["ussd.main_menu"])
