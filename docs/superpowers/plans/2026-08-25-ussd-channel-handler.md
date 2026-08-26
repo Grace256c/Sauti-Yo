@@ -17,6 +17,7 @@
 - `UssdSession` lives in `apps/channels/models.py` (not under `ussd/`) so Django's migration discovery for the `apps.channels` app picks it up.
 - Rights content (`Situation.description`, `RightsTopic.summary`, `ActionStep.description`, `SafetyResponse.message`) is served in English regardless of the selected language — only USSD chrome (menu labels, prompts) is looked up per-language via `ChannelContent(channel="ussd")`, falling back to hardcoded English `DEFAULT_COPY` when no row exists. See spec section "Language handling".
 - Spec: `docs/superpowers/specs/2026-08-25-ussd-channel-handler-design.md` — this plan implements that spec in full; consult it for the "why" behind any decision below.
+- **Amendment (found during Task 5 implementation):** the plan originally assumed `RightsTopic` already had a `risk_level` field (it doesn't — only `Situation` does). Task 5 adds `risk_level` to `RightsTopic` (`apps/rights/models.py`, choices `standard`/`sensitive`/`high_risk`, default `"standard"`, matching `Situation.RISK_LEVEL_CHOICES`) plus its migration, so that `_enter_topic()`'s `topic.risk_level` check (Task 5) and the safety-gate tests (Task 6) work as originally written. This is the only place this plan modifies a model outside `apps.channels`.
 
 ---
 
@@ -25,6 +26,8 @@
 | File | Status | Responsibility |
 |---|---|---|
 | `backend/apps/channels/models.py` | Modify | Add `UssdSession` model |
+| `backend/apps/rights/models.py` | Modify (Task 5 amendment) | Add `risk_level` to `RightsTopic` |
+| `backend/apps/rights/migrations/000X_risktopic_risk_level.py` | Generate (Task 5 amendment) | Migration for the new field |
 | `backend/apps/channels/migrations/000X_ussdsession.py` | Generate | Migration for `UssdSession` |
 | `backend/apps/channels/ussd/sessions.py` | Create | CRUD helpers over `UssdSession` |
 | `backend/apps/channels/ussd/menus.py` | Create | Copy/pagination helpers + one render/transition function pair per screen state + dispatch tables |
