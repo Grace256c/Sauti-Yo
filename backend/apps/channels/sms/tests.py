@@ -383,11 +383,19 @@ class HandleSmsRequestTests(TestCase):
         self.assertEqual(phone, "+256700000000")
         self.assertIn("Sauti 116 - Child & GBV Helpline", message)
 
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
     @patch("apps.channels.sms.handler.send_sms")
-    def test_situation_keyword_with_discreet_omits_service_name(self, mock_send):
+    def test_situation_keyword_with_discreet_omits_service_name(
+        self, mock_send, mock_reword
+    ):
+        # home-safety is high_risk, so the first message about it triggers
+        # the safety check-in question first (see SafetyCheckinTests);
+        # answering it resolves to the discreet situation reply.
+        mock_reword.return_value = None
         handle_sms_request("+256700000000", "home discreet")
-        message = mock_send.call_args[0][1]
-        self.assertNotIn("Sauti 116 - Child & GBV Helpline", message)
+        handle_sms_request("+256700000000", "yes")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertNotIn("Sauti 116 - Child & GBV Helpline", second_message)
 
     @patch("apps.channels.sms.handler.send_sms")
     def test_situation_keyword_creates_sms_context(self, mock_send):
@@ -565,6 +573,7 @@ class SmsCallbackViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+@override_settings(LLM_API_KEY="")
 class AiFallbackTests(TestCase):
     def setUp(self):
         _create_home_safety_situation()
