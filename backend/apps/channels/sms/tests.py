@@ -12,6 +12,16 @@ from apps.channels.sms.keywords import (
     match_help,
     match_situation,
 )
+from apps.rights.models import (
+    ActionStep,
+    RightsTopic,
+    SafetyResponse,
+    Situation,
+    SituationRightsTopic,
+)
+from apps.rights.services import get_situation_detail
+from apps.support.models import SupportService
+from apps.channels.sms import templates
 
 
 class SendSmsTests(TestCase):
@@ -112,3 +122,148 @@ class KeywordMatchingTests(TestCase):
 
     def test_match_discreet_false_by_default(self):
         self.assertFalse(match_discreet("HOME"))
+
+
+def _create_home_safety_situation():
+    situation = Situation.objects.create(
+        slug="home-safety",
+        title="I don't feel safe at home",
+        description="For situations involving abuse or fear at home.",
+        risk_level="high_risk",
+    )
+    topic = RightsTopic.objects.create(
+        slug="domestic-violence-rights",
+        title="Domestic Violence & Your Rights",
+        summary="The Domestic Violence Act protects you from abuse.",
+        risk_level="high_risk",
+    )
+    SituationRightsTopic.objects.create(situation=situation, rights_topic=topic)
+    ActionStep.objects.create(
+        rights_topic=topic,
+        order=1,
+        title="Move somewhere safer",
+        description="Move to a safer location if you can.",
+        is_safety_critical=True,
+    )
+    SafetyResponse.objects.create(
+        rights_topic=topic,
+        trigger_key="immediate_danger",
+        message="Your safety matters. Call Sauti 116.",
+    )
+    service = SupportService.objects.create(
+        name="Sauti 116 - Child & GBV Helpline",
+        service_type="helpline",
+        phone_number="116",
+        is_emergency_service=True,
+    )
+    topic.support_services.add(service)
+    return situation
+
+
+def _create_land_situation_without_safety_response():
+    situation = Situation.objects.create(
+        slug="land-property",
+        title="Land or property problem",
+        risk_level="standard",
+    )
+    topic = RightsTopic.objects.create(
+        slug="matrimonial-property-rights",
+        title="Property Rights After Separation",
+        summary="You may have a right to a share of matrimonial property.",
+    )
+    SituationRightsTopic.objects.create(situation=situation, rights_topic=topic)
+    return situation
+
+
+class BuildSituationReplyTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+        self.detail = get_situation_detail("home-safety")
+
+    def test_normal_mode_includes_full_names(self):
+        reply = templates.build_situation_reply(self.detail, mode="normal")
+        self.assertIn("Sauti 116 - Child & GBV Helpline", reply)
+        self.assertIn("Move to a safer location", reply)
+
+    def test_discreet_mode_omits_service_name(self):
+        reply = templates.build_situation_reply(self.detail, mode="discreet")
+        self.assertNotIn("Sauti 116 - Child & GBV Helpline", reply)
+        self.assertIn("116", reply)
+
+    def test_falls_back_to_description_without_channel_content(self):
+        reply = templates.build_situation_reply(self.detail, mode="normal")
+        self.assertIn(
+            "For situations involving abuse or fear at home.", reply
+        )
+
+
+class BuildSupportReplyTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+        self.detail = get_situation_detail("home-safety")
+
+    def test_uses_situation_support_services_when_detail_given(self):
+        reply = templates.build_support_reply(self.detail)
+        self.assertIn("116", reply)
+
+    def test_falls_back_to_no_services_message_when_empty(self):
+        empty_detail = dict(self.detail)
+        empty_detail["rights_topics"] = [
+            dict(t, support_services=[]) for t in self.detail["rights_topics"]
+        ]
+        reply = templates.build_support_reply(empty_detail)
+        self.assertEqual(reply, templates.NO_SUPPORT_SERVICES_REPLY)
+
+    def test_uses_general_emergency_services_when_no_detail(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        reply = templates.build_support_reply(None)
+        self.assertIn("0800199195", reply)
+
+
+class BuildSafetyReplyTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+        self.detail = get_situation_detail("home-safety")
+
+    def test_uses_predefined_safety_message_when_detail_given(self):
+        reply = templates.build_safety_reply(self.detail)
+        self.assertEqual(reply, "Your safety matters. Call Sauti 116.")
+
+    def test_falls_back_to_general_safety_reply_without_detail(self):
+        reply = templates.build_safety_reply(None)
+        self.assertIn("999", reply)
+
+    def test_falls_back_to_general_safety_reply_when_no_matching_response(self):
+        _create_land_situation_without_safety_response()
+        detail = get_situation_detail("land-property")
+        reply = templates.build_safety_reply(detail)
+        self.assertIn("999", reply)
+
+
+class BuildStepsReplyTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+        self.detail = get_situation_detail("home-safety")
+
+    def test_lists_action_steps(self):
+        reply = templates.build_steps_reply(self.detail)
+        self.assertIn("Move to a safer location", reply)
+
+    def test_falls_back_when_no_steps(self):
+        _create_land_situation_without_safety_response()
+        detail = get_situation_detail("land-property")
+        reply = templates.build_steps_reply(detail)
+        self.assertEqual(reply, templates.NO_ACTION_STEPS_REPLY)
+
+
+class FixedReplyTests(TestCase):
+    def test_build_unmatched_reply(self):
+        self.assertIn("HOME", templates.build_unmatched_reply())
+
+    def test_build_followup_expired_reply(self):
+        self.assertIn("STEPS", templates.build_followup_expired_reply())
