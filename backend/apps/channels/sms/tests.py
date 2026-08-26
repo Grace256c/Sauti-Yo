@@ -1,8 +1,10 @@
 from unittest.mock import MagicMock, patch
 
+from django.db import IntegrityError
 from django.test import TestCase
 
 from apps.channels import africastalking_client
+from apps.channels.models import SmsContext
 
 
 class SendSmsTests(TestCase):
@@ -37,3 +39,21 @@ class SendSmsTests(TestCase):
         ):
             africastalking_client._get_sms_service()
         mock_at.initialize.assert_called_once_with("sandbox", "test-key")
+
+
+class SmsContextModelTests(TestCase):
+    def test_create_context_with_defaults(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        self.assertEqual(context.last_situation_slug, "home-safety")
+        self.assertIsNotNone(context.updated_at)
+
+    def test_phone_number_is_unique(self):
+        SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        with self.assertRaises(IntegrityError):
+            SmsContext.objects.create(
+                phone_number="+256700000000", last_situation_slug="work"
+            )
