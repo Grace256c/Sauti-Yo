@@ -107,6 +107,12 @@ def get_safety_message(situation_slug, trigger_key="immediate_danger"):
     construct safety-critical wording itself - it always comes from a
     human-reviewed SafetyResponse row. Returns None if no matching
     safety response exists.
+
+    Tries `trigger_key` first, then falls back to the "default" trigger
+    key if nothing matched - different channels in this codebase have
+    used different trigger_key conventions (USSD uses "default"; this
+    function's own default is "immediate_danger"), so this fallback keeps
+    both working against the same seeded content.
     """
     detail = get_situation_detail(situation_slug)
     if not detail:
@@ -115,4 +121,9 @@ def get_safety_message(situation_slug, trigger_key="immediate_danger"):
         for response in topic["safety_responses"]:
             if response["trigger_key"] == trigger_key:
                 return response["message"]
+    if trigger_key != "default":
+        for topic in detail["rights_topics"]:
+            for response in topic["safety_responses"]:
+                if response["trigger_key"] == "default":
+                    return response["message"]
     return None

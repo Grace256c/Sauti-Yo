@@ -105,3 +105,19 @@ class RightsServicesTests(TestCase):
     def test_get_safety_message_returns_none_when_no_match(self):
         message = get_safety_message("home-safety", "nonexistent_trigger")
         self.assertIsNone(message)
+
+    def test_get_safety_message_falls_back_to_default_trigger_key(self):
+        situation = Situation.objects.create(
+            slug="fallback-test", title="Fallback Test", risk_level="high_risk"
+        )
+        topic = RightsTopic.objects.create(
+            slug="fallback-topic", title="Fallback Topic", summary="summary"
+        )
+        SituationRightsTopic.objects.create(situation=situation, rights_topic=topic)
+        SafetyResponse.objects.create(
+            rights_topic=topic,
+            trigger_key="default",
+            message="Fallback safety message.",
+        )
+        message = get_safety_message("fallback-test", "immediate_danger")
+        self.assertEqual(message, "Fallback safety message.")
