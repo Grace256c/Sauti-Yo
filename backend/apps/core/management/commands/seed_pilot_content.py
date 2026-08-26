@@ -23,6 +23,8 @@ class Command(BaseCommand):
 
         self._seed_workplace()
         self._seed_eviction()
+        self._seed_domestic_violence()
+        self._seed_sexual_harassment()
 
         self.stdout.write(
             self.style.SUCCESS("Sauti Yo pilot content seeded successfully.")
@@ -238,3 +240,259 @@ class Command(BaseCommand):
             is_emergency_service=False,
         )
         rights_topic.support_services.add(legal_aid)
+
+    def _seed_domestic_violence(self):
+        situation, _ = Situation.objects.update_or_create(
+            slug="domestic-violence",
+            defaults={
+                "title": "I'm experiencing domestic violence",
+                "description": (
+                    "Information on your legal protections and how to "
+                    "get immediate help if you or someone you know is "
+                    "experiencing domestic violence."
+                ),
+                "risk_level": "high_risk",
+                "is_active": True,
+            },
+        )
+
+        rights_topic, _ = RightsTopic.objects.update_or_create(
+            slug="domestic-violence-protection",
+            defaults={
+                "title": "Your right to protection under the law",
+                "summary": (
+                    "Uganda's Domestic Violence Act lets you apply for "
+                    "a protection order against an abuser, including "
+                    "without them being present, and courts can order "
+                    "an abuser to leave the home."
+                ),
+                "risk_level": "high_risk",
+                "source_name": (
+                    "Domestic Violence Act, 2010 (Act No. 3 of 2010), "
+                    "Laws of Uganda"
+                ),
+                "source_url": (
+                    "https://ulii.org/en/akn/ug/act/2010/3/eng@2023-12-31"
+                ),
+                "reviewed_by": "",
+                "verification_status": "review_required",
+                "is_active": True,
+            },
+        )
+
+        SituationRightsTopic.objects.get_or_create(
+            situation=situation,
+            rights_topic=rights_topic,
+        )
+
+        SafetyResponse.objects.update_or_create(
+            rights_topic=rights_topic,
+            trigger_key="default",
+            defaults={
+                "message": (
+                    "If you are in immediate danger, get to a safe "
+                    "place if you can and call the Uganda Police GBV "
+                    "Helpline on 0800 199 195 (toll-free) or go to the "
+                    "nearest police station now. This is not a "
+                    "substitute for emergency help — it's here so you "
+                    "know your rights once you're safe: Ugandan law "
+                    "lets you apply for a protection order against an "
+                    "abuser, and a court can order them to leave your "
+                    "home."
+                ),
+                "is_active": True,
+            },
+        )
+
+        self._seed_action_steps(
+            rights_topic,
+            [
+                (
+                    1,
+                    "Get to safety first",
+                    "If you're in danger right now, prioritise getting "
+                    "somewhere safe over anything else on this list.",
+                    True,
+                ),
+                (
+                    2,
+                    "Report to the Police Family & Child Protection desk",
+                    "You can report at any police station, or call the "
+                    "GBV helpline on 0800 199 195.",
+                    False,
+                ),
+                (
+                    3,
+                    "Ask about a protection order",
+                    "You or someone on your behalf can apply to a "
+                    "magistrate's court for a protection order — this "
+                    "can be done without your abuser present.",
+                    False,
+                ),
+                (
+                    4,
+                    "Reach out for ongoing support",
+                    "Organisations like MIFUMI and FIDA-Uganda offer "
+                    "confidential help, counselling, and further legal "
+                    "support.",
+                    False,
+                ),
+            ],
+        )
+
+        police_gbv = self._support_service(
+            name="Uganda Police GBV Helpline",
+            service_type="Emergency / GBV Response",
+            description=(
+                "Toll-free helpline run by the Uganda Police Force "
+                "Department of Child and Family Protection for "
+                "reporting gender-based violence and getting help."
+            ),
+            phone_number="0800199195",
+            coverage="National",
+            is_emergency_service=True,
+        )
+        mifumi = self._support_service(
+            name="MIFUMI Domestic Violence Helpline",
+            service_type="Counselling & Shelter",
+            description=(
+                "Confidential helpline and support services for "
+                "women, children, and youth affected by domestic "
+                "violence."
+            ),
+            phone_number="0800200250",
+            coverage="National",
+            is_emergency_service=False,
+        )
+        fida = self._support_service(
+            name="FIDA-Uganda",
+            service_type="Legal Aid",
+            description=(
+                "Free legal aid and support from the Uganda "
+                "Association of Women Lawyers."
+            ),
+            phone_number="0800111511",
+            coverage="National",
+            is_emergency_service=False,
+        )
+        rights_topic.support_services.add(police_gbv, mifumi, fida)
+
+    def _seed_sexual_harassment(self):
+        situation, _ = Situation.objects.update_or_create(
+            slug="sexual-harassment",
+            defaults={
+                "title": "I'm experiencing sexual harassment",
+                "description": (
+                    "Information on your rights if you're facing "
+                    "sexual harassment, particularly at work, and how "
+                    "to report it safely."
+                ),
+                "risk_level": "sensitive",
+                "is_active": True,
+            },
+        )
+
+        rights_topic, _ = RightsTopic.objects.update_or_create(
+            slug="sexual-harassment-rights",
+            defaults={
+                "title": "Your rights against sexual harassment",
+                "summary": (
+                    "Ugandan law requires workplaces to have a sexual "
+                    "harassment policy and gives you the right to "
+                    "report confidentially, including to a Labour "
+                    "Officer."
+                ),
+                "risk_level": "sensitive",
+                "source_name": (
+                    "Employment Act, 2006, s.7(1) and Employment "
+                    "(Sexual Harassment) Regulations, 2012"
+                ),
+                "source_url": (
+                    "https://ulii.org/akn/ug/act/2006/6/eng@2023-12-31/source"
+                ),
+                "reviewed_by": "",
+                "verification_status": "review_required",
+                "is_active": True,
+            },
+        )
+
+        SituationRightsTopic.objects.get_or_create(
+            situation=situation,
+            rights_topic=rights_topic,
+        )
+
+        SafetyResponse.objects.update_or_create(
+            rights_topic=rights_topic,
+            trigger_key="default",
+            defaults={
+                "message": (
+                    "This section covers sexual harassment, which can "
+                    "be difficult to read about. Confidential help is "
+                    "available if you'd rather talk to someone first "
+                    "— FIDA-Uganda (0800 111 511) offers free, "
+                    "confidential legal support."
+                ),
+                "is_active": True,
+            },
+        )
+
+        self._seed_action_steps(
+            rights_topic,
+            [
+                (
+                    1,
+                    "Write down what happened",
+                    "Note the date, what happened, and any witnesses, "
+                    "as soon as you safely can.",
+                    False,
+                ),
+                (
+                    2,
+                    "Report it internally first, if safe to do so",
+                    "Workplaces with 25+ staff are legally required to "
+                    "have a sexual harassment policy and committee — "
+                    "you can report to them or your supervisor.",
+                    False,
+                ),
+                (
+                    3,
+                    "Report to a Labour Officer if needed",
+                    "If it's unresolved or you don't feel safe reporting "
+                    "internally, a Labour Officer must keep your report "
+                    "confidential.",
+                    False,
+                ),
+                (
+                    4,
+                    "Get free legal advice",
+                    "FIDA-Uganda and the Uganda Law Society Legal Aid "
+                    "Project both offer free, confidential support.",
+                    False,
+                ),
+            ],
+        )
+
+        fida = self._support_service(
+            name="FIDA-Uganda",
+            service_type="Legal Aid",
+            description=(
+                "Free legal aid and support from the Uganda "
+                "Association of Women Lawyers."
+            ),
+            phone_number="0800111511",
+            coverage="National",
+            is_emergency_service=False,
+        )
+        legal_aid = self._support_service(
+            name="Uganda Law Society Legal Aid Project",
+            service_type="Legal Aid",
+            description=(
+                "Free legal advice, representation, and referrals for "
+                "the poor, indigent, and vulnerable."
+            ),
+            phone_number="0800100150",
+            coverage="National",
+            is_emergency_service=False,
+        )
+        rights_topic.support_services.add(fida, legal_aid)
+
