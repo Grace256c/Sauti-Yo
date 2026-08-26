@@ -1,10 +1,13 @@
+from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.db import IntegrityError
 from django.test import TestCase
+from django.utils import timezone
 
 from apps.channels import africastalking_client
 from apps.channels.models import SmsContext
+from apps.channels.sms.handler import handle_sms_request
 from apps.channels.sms.keywords import (
     match_danger,
     match_discreet,
@@ -275,3 +278,97 @@ class FixedReplyTests(TestCase):
 
     def test_build_followup_expired_reply(self):
         self.assertIn("STEPS", templates.build_followup_expired_reply())
+
+
+class HandleSmsRequestTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_situation_keyword_sends_normal_reply(self, mock_send):
+        handle_sms_request("+256700000000", "My husband beats me")
+        mock_send.assert_called_once()
+        phone, message = mock_send.call_args[0]
+        self.assertEqual(phone, "+256700000000")
+        self.assertIn("Sauti 116 - Child & GBV Helpline", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_situation_keyword_with_discreet_omits_service_name(self, mock_send):
+        handle_sms_request("+256700000000", "home discreet")
+        message = mock_send.call_args[0][1]
+        self.assertNotIn("Sauti 116 - Child & GBV Helpline", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_situation_keyword_creates_sms_context(self, mock_send):
+        handle_sms_request("+256700000000", "my husband beats me")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.last_situation_slug, "home-safety")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_danger_word_sends_safety_reply_with_context(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        handle_sms_request("+256700000000", "he has a weapon right now")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, "Your safety matters. Call Sauti 116.")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_danger_word_sends_general_safety_reply_without_context(self, mock_send):
+        handle_sms_request("+256711111111", "emergency, weapon")
+        message = mock_send.call_args[0][1]
+        self.assertIn("999", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_help_alone_sends_support_reply(self, mock_send):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        handle_sms_request("+256700000000", "HELP")
+        message = mock_send.call_args[0][1]
+        self.assertIn("0800199195", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_followup_support_within_window(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        handle_sms_request("+256700000000", "SUPPORT")
+        message = mock_send.call_args[0][1]
+        self.assertIn("116", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_followup_steps_within_window(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        handle_sms_request("+256700000000", "STEPS")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Move to a safer location", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_followup_expired_context(self, mock_send):
+        context = SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        SmsContext.objects.filter(pk=context.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=11)
+        )
+        handle_sms_request("+256700000000", "STEPS")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.build_followup_expired_reply())
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_followup_without_any_context(self, mock_send):
+        handle_sms_request("+256799999999", "SUPPORT")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.build_followup_expired_reply())
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_unmatched_text_sends_fallback_reply(self, mock_send):
+        handle_sms_request("+256700000000", "hello there")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.build_unmatched_reply())
