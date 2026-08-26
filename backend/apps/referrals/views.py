@@ -1,3 +1,4 @@
+from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 
@@ -193,20 +194,8 @@ class ReferralCreateAPIView(APIView):
         )
 
     def _generate_reference(self):
-        latest = (
-            Referral.objects
-            .order_by("-id")
-            .first()
-        )
-
-        next_number = (
-            latest.id + 1
-            if latest
-            else 1
-        )
-
         return (
-            f"SY-REF-{next_number:06d}"
+            f"SY-REF-{uuid4().hex[:12].upper()}"
         )
 
 
@@ -504,18 +493,6 @@ class CitizenReferralCreateAPIView(APIView):
         )
 
     def _generate_reference(self):
-        latest = (
-            Referral.objects
-            .order_by("-id")
-            .first()
-        )
-
-        next_number = (
-            latest.id + 1
-            if latest
-            else 1
-        )
-
         return (
-            f"SY-REF-{next_number:06d}"
+            f"SY-REF-{uuid4().hex[:12].upper()}"
         )
