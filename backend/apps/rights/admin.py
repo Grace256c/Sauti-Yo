@@ -47,6 +47,7 @@ class SituationAdmin(admin.ModelAdmin):
 class RightsTopicAdmin(admin.ModelAdmin):
     list_display = (
         "title",
+        "risk_level",
         "verification_status",
         "reviewed_by",
         "last_reviewed",
@@ -54,6 +55,7 @@ class RightsTopicAdmin(admin.ModelAdmin):
     )
 
     list_filter = (
+        "risk_level",
         "verification_status",
         "is_active",
     )

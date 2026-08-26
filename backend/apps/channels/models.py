@@ -22,6 +22,10 @@ class UssdSession(models.Model):
 
     context = models.JSONField(default=dict, blank=True)
 
+    last_text = models.TextField(blank=True, default="")
+
+    last_response = models.TextField(blank=True, default="")
+
     is_active = models.BooleanField(default=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

@@ -6,7 +6,24 @@ MAX_INVALID_ATTEMPTS = 3
 def handle_ussd_request(session_id, phone_number, text):
     session, created = sessions.get_or_create_session(session_id, phone_number)
 
-    if created:
+    if not created and text == session.last_text and session.last_response:
+        return session.last_response
+
+    response = _handle(session, created, text)
+    sessions.update_session(session, last_text=text, last_response=response)
+    return response
+
+
+def _handle(session, created, text):
+    needs_restart = not created and (
+        not session.is_active or session.state not in menus.TRANSITION_HANDLERS
+    )
+    if needs_restart:
+        sessions.update_session(
+            session, state="language_select", context={}, is_active=True
+        )
+
+    if created or needs_restart:
         response_text, ended = menus.render_state(session.state, session)
         sessions.update_session(session, is_active=not ended)
         return _format_response(response_text, ended)

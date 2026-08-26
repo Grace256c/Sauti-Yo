@@ -89,6 +89,18 @@ class TextHelperTests(TestCase):
     def test_chunk_text_of_empty_string_returns_single_empty_chunk(self):
         self.assertEqual(menus.chunk_text("", budget=160), [""])
 
+    def test_chunk_text_preserves_newlines_within_budget(self):
+        text = "Line one.\nLine two.\nLine three."
+        chunks = menus.chunk_text(text, budget=160)
+        self.assertEqual(chunks, ["Line one.\nLine two.\nLine three."])
+
+    def test_chunk_text_never_merges_two_original_lines_onto_one_line(self):
+        text = "Alice: 0700000001\nBob: 0700000002\nCarol: 0700000003"
+        chunks = menus.chunk_text(text, budget=160)
+        joined = "\n".join(chunks)
+        for original_line in text.split("\n"):
+            self.assertIn(original_line, joined.split("\n"))
+
     def test_paginate_items_returns_page_and_has_more_flag(self):
         items = list(range(12))
         page_items, has_more = menus.paginate_items(items, page=0, page_size=5)
@@ -194,27 +206,37 @@ from apps.rights.models import RightsTopic, Situation, SituationRightsTopic
 class SituationListTests(TestCase):
     def setUp(self):
         self.situations = [
-            Situation.objects.create(slug=f"situation-{i}", title=f"Situation {i}")
+            Situation.objects.create(
+                slug=f"situation-{i}",
+                title=f"Realistic long situation title number {i} about a legal issue",
+            )
             for i in range(7)
         ]
 
-    def test_render_lists_first_page_with_more_option(self):
+    def test_render_screen_never_exceeds_africas_talking_screen_cap(self):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
         )
         text, ended = menus.render_situation_list(session)
-        self.assertIn("1. Situation 0", text)
-        self.assertIn("5. Situation 4", text)
-        self.assertIn("8.", text)
+        self.assertLessEqual(len(text), 182)
         self.assertFalse(ended)
 
-    def test_render_last_page_has_no_more_option(self):
+    def test_render_first_page_shows_more_option_when_not_all_fit(self):
         session = UssdSession(
-            state="situation_list", language="en", context={"page": 1}
+            state="situation_list", language="en", context={"page": 0}
         )
         text, ended = menus.render_situation_list(session)
-        self.assertIn("Situation 5", text)
-        self.assertNotIn("8.", text)
+        self.assertIn("1. ", text)
+        self.assertIn("8.", text)
+
+    def test_transition_next_page_advances_past_shown_items(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_situation_list(session, "8")
+        self.assertEqual(next_state, "situation_list")
+        self.assertGreater(context["page"], 0)
+        self.assertLess(context["page"], len(self.situations))
 
     def test_render_with_no_situations_shows_empty_message(self):
         Situation.objects.all().delete()
@@ -261,14 +283,6 @@ class SituationListTests(TestCase):
         self.assertEqual(
             context, {"situation_slug": "situation-0", "chunk_index": 0}
         )
-
-    def test_transition_next_page(self):
-        session = UssdSession(
-            state="situation_list", language="en", context={"page": 0}
-        )
-        next_state, context = menus.transition_situation_list(session, "8")
-        self.assertEqual(next_state, "situation_list")
-        self.assertEqual(context, {"page": 1})
 
     def test_transition_back_to_main_menu(self):
         session = UssdSession(
@@ -362,6 +376,24 @@ class SituationDetailTests(TestCase):
         next_state, context = menus.transition_situation_detail(session, "0")
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
+
+    def test_render_last_chunk_never_exceeds_screen_cap_with_many_topics(self):
+        for i in range(7):
+            topic = RightsTopic.objects.create(
+                slug=f"budget-topic-{i}",
+                title=f"A reasonably long rights topic title number {i}",
+                summary="Summary",
+            )
+            SituationRightsTopic.objects.create(
+                situation=self.situation, rights_topic=topic
+            )
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertLessEqual(len(text), 182)
 
     def test_transition_selects_high_risk_topic_routes_to_safety_gate(self):
         from apps.rights.models import SafetyResponse
@@ -492,6 +524,16 @@ class SafetyGateTests(TestCase):
         text, ended = menus.render_safety_gate(self._session(0))
         self.assertIn("Summary", text)
         self.assertFalse(ended)
+
+    def test_high_risk_topic_with_no_safety_response_still_gates(self):
+        topic = RightsTopic.objects.create(
+            slug="no-response-topic",
+            title="No Response Topic",
+            summary="Fallback summary text",
+            risk_level="high_risk",
+        )
+        next_state, context = menus._enter_topic("some-situation", topic)
+        self.assertEqual(next_state, "safety_gate")
 
 
 class ActionStepsTests(TestCase):
@@ -691,6 +733,23 @@ class HandleUssdRequestTests(TestCase):
         self.assertIn("Too many invalid attempts", response)
         session = UssdSession.objects.get(session_id="sess-5")
         self.assertFalse(session.is_active)
+
+    def test_replayed_request_returns_cached_response_without_double_advancing(self):
+        handle_ussd_request("sess-replay", "+256700000000", "")
+        first_response = handle_ussd_request("sess-replay", "+256700000000", "1")
+        replayed_response = handle_ussd_request("sess-replay", "+256700000000", "1")
+        self.assertEqual(first_response, replayed_response)
+
+        session = UssdSession.objects.get(session_id="sess-replay")
+        self.assertEqual(session.state, "main_menu")
+
+    def test_request_after_goodbye_restarts_instead_of_crashing(self):
+        handle_ussd_request("sess-restart", "+256700000000", "")
+        handle_ussd_request("sess-restart", "+256700000000", "1")
+        handle_ussd_request("sess-restart", "+256700000000", "1*0")
+
+        response = handle_ussd_request("sess-restart", "+256700000000", "1*0*1")
+        self.assertIn("1. English", response)
 
     def test_stale_session_id_restarts_at_language_picker(self):
         response = handle_ussd_request("unknown-session", "+256700000000", "1*1*1")

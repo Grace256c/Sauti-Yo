@@ -61,6 +61,7 @@ class RightsTopicSerializer(serializers.ModelSerializer):
             "id",
             "slug",
             "title",
+            "risk_level",
             "summary",
             "source_name",
             "source_url",
