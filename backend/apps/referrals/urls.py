@@ -33,3 +33,15 @@ urlpatterns = [
         name="referral-status-update",
     ),
 ]
+
+
+from .views import CitizenReferralCreateAPIView
+
+
+urlpatterns += [
+    path(
+        "citizen/create/",
+        CitizenReferralCreateAPIView.as_view(),
+        name="citizen-referral-create",
+    ),
+]

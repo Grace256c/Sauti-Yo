@@ -383,3 +383,139 @@ class ReferralStatusUpdateAPIView(APIView):
             output.data,
             status=status.HTTP_200_OK,
         )
+
+
+from rest_framework.permissions import AllowAny
+
+from apps.partners.models import (
+    PartnerOrganisation,
+    PartnerVerificationRequest,
+)
+
+from .serializers import CitizenReferralCreateSerializer
+
+
+class CitizenReferralCreateAPIView(APIView):
+    """
+    Creates a consented citizen referral to an eligible,
+    verified partner organisation.
+    """
+
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(
+        self,
+        request,
+    ):
+        serializer = CitizenReferralCreateSerializer(
+            data=request.data,
+        )
+
+        serializer.is_valid(
+            raise_exception=True,
+        )
+
+        organisation = serializer.validated_data[
+            "organisation"
+        ]
+
+        organisation = (
+            PartnerOrganisation.objects
+            .select_related(
+                "service_configuration",
+            )
+            .filter(
+                pk=organisation.pk,
+                is_active=True,
+            )
+            .first()
+        )
+
+        if organisation is None:
+            return Response(
+                {
+                    "detail":
+                        "This support provider is not available."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        configuration = getattr(
+            organisation,
+            "service_configuration",
+            None,
+        )
+
+        if (
+            configuration is None
+            or not configuration.accepting_referrals
+        ):
+            return Response(
+                {
+                    "detail":
+                        "This support provider is not currently accepting referrals."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        verified = (
+            PartnerVerificationRequest.objects
+            .filter(
+                organisation=organisation,
+                status="verified",
+            )
+            .exists()
+        )
+
+        if not verified:
+            return Response(
+                {
+                    "detail":
+                        "This support provider is not currently eligible for citizen referrals."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        referral = serializer.save(
+            reference=self._generate_reference(),
+            status="new",
+            shared_at=timezone.now(),
+        )
+
+        ReferralStatusHistory.objects.create(
+            referral=referral,
+            from_status="",
+            to_status="new",
+            changed_by=None,
+            note="Citizen referral created with consent.",
+        )
+
+        output = ReferralSerializer(
+            referral,
+            context={
+                "request": request,
+            },
+        )
+
+        return Response(
+            output.data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    def _generate_reference(self):
+        latest = (
+            Referral.objects
+            .order_by("-id")
+            .first()
+        )
+
+        next_number = (
+            latest.id + 1
+            if latest
+            else 1
+        )
+
+        return (
+            f"SY-REF-{next_number:06d}"
+        )
