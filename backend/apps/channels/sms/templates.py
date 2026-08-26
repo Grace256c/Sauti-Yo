@@ -22,9 +22,12 @@ NO_ACTION_STEPS_REPLY = (
     "No specific steps are available for this yet. Text SUPPORT for help "
     "contacts."
 )
+DISCREET_INTRO = "Here is some information about your recent inquiry:"
 
 
-def _situation_intro(detail):
+def _situation_intro(detail, mode="normal"):
+    if mode == "discreet":
+        return DISCREET_INTRO
     text = get_channel_text(detail["slug"], "sms", "en")
     if text:
         return text
@@ -47,7 +50,7 @@ def _first_support_service(detail):
 
 
 def build_situation_reply(detail, mode="normal"):
-    intro = _situation_intro(detail)
+    intro = _situation_intro(detail, mode)
     step = _first_action_step(detail)
     service = _first_support_service(detail)
 

@@ -196,6 +196,14 @@ class BuildSituationReplyTests(TestCase):
             "For situations involving abuse or fear at home.", reply
         )
 
+    def test_discreet_mode_omits_situation_identity(self):
+        reply = templates.build_situation_reply(self.detail, mode="discreet")
+        self.assertNotIn("I don't feel safe at home", reply)
+        self.assertNotIn(
+            "For situations involving abuse or fear at home.", reply
+        )
+        self.assertIn(templates.DISCREET_INTRO, reply)
+
 
 class BuildSupportReplyTests(TestCase):
     def setUp(self):
