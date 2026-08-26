@@ -684,3 +684,61 @@ class ClassifySituationTests(TestCase):
         mock_anthropic_module.Anthropic.return_value.with_options.assert_called_once_with(
             timeout=5.0
         )
+
+
+class RewordReplyTests(TestCase):
+    def setUp(self):
+        self.mock_client = MagicMock()
+        ai_classifier._client = self.mock_client
+
+    def tearDown(self):
+        ai_classifier._client = None
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_reworded_text_when_facts_preserved(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response(
+                "I'm sorry you're going through this. Call 116 for free help."
+            )
+        )
+        result = ai_classifier.reword_reply("Sauti 116: Call 116 for help.")
+        self.assertEqual(
+            result,
+            "I'm sorry you're going through this. Call 116 for free help.",
+        )
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_when_phone_number_dropped(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("I'm sorry you're going through this.")
+        )
+        result = ai_classifier.reword_reply("Sauti 116: Call 116 for help.")
+        self.assertIsNone(result)
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_when_client_raises(self):
+        self.mock_client.with_options.return_value.messages.create.side_effect = (
+            RuntimeError("boom")
+        )
+        result = ai_classifier.reword_reply("Some template text")
+        self.assertIsNone(result)
+
+    @override_settings(LLM_API_KEY="")
+    def test_returns_none_and_skips_call_when_api_key_unset(self):
+        result = ai_classifier.reword_reply("Some template text")
+        self.assertIsNone(result)
+        self.mock_client.with_options.assert_not_called()
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_for_empty_template_text(self):
+        result = ai_classifier.reword_reply("   ")
+        self.assertIsNone(result)
+        self.mock_client.with_options.assert_not_called()
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_reworded_text_when_original_has_no_phone_number(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("I'm here for you.")
+        )
+        result = ai_classifier.reword_reply("You're not alone in this.")
+        self.assertEqual(result, "I'm here for you.")

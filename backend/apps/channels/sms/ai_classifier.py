@@ -1,4 +1,5 @@
 import logging
+import re
 
 import anthropic
 from django.conf import settings
@@ -15,6 +16,14 @@ CLASSIFIER_SYSTEM_PROMPT = (
     "from a citizen, respond with ONLY the matching situation's slug, "
     "or the single word NONE if nothing clearly matches. Never explain, "
     "never add commentary, never invent a slug that isn't in the list."
+)
+
+REWORD_SYSTEM_PROMPT = (
+    "You rewrite Sauti Yo SMS replies in a warmer, more conversational "
+    "tone. You MUST NOT add, remove, or change any fact, phone number, "
+    "name, or instruction in the original message - only rephrase how "
+    "it is said. Keep it concise. Reply with ONLY the reworded "
+    "message, nothing else."
 )
 
 _client = None
@@ -80,3 +89,44 @@ def classify_situation(text):
     if reply_text in valid_slugs:
         return reply_text
     return None
+
+
+def reword_reply(template_text):
+    """
+    Asks Claude to rephrase an already-composed, verified SMS reply in a
+    warmer tone, without changing any fact. Returns the reworded text,
+    or None if rewording isn't possible/safe - the caller should send
+    the original `template_text` unchanged in that case. Every failure
+    mode (missing key, empty input, API error, or the reworded text
+    dropping a phone number that was in the original) returns None.
+    """
+    if not settings.LLM_API_KEY or not template_text.strip():
+        return None
+
+    phone_numbers = re.findall(r"\d{3,}", template_text)
+
+    try:
+        client = _get_client()
+        response = client.with_options(timeout=5.0).messages.create(
+            model=MODEL,
+            max_tokens=200,
+            system=REWORD_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": template_text}],
+        )
+        reworded = next(
+            (block.text for block in response.content if block.type == "text"),
+            "",
+        ).strip()
+    except Exception:
+        logger.warning("Reply rewording failed", exc_info=True)
+        return None
+
+    if not reworded:
+        return None
+    for number in phone_numbers:
+        if number not in reworded:
+            logger.warning(
+                "Reworded reply dropped a phone number, discarding"
+            )
+            return None
+    return reworded
