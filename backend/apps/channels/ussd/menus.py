@@ -227,7 +227,8 @@ def render_situation_detail(session):
         trailing = f"0. {back}"
 
     text = situation.description or situation.title
-    return _chunked_screen(text, chunk_index, trailing, session.language)
+    screen, _ = _chunked_screen(text, chunk_index, trailing, session.language)
+    return screen, False
 
 
 def transition_situation_detail(session, user_input):

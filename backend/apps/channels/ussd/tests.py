@@ -323,6 +323,15 @@ class SituationDetailTests(TestCase):
         self.assertIn("1. Topic A", text)
         self.assertIn("2. Topic B", text)
 
+    def test_render_last_chunk_does_not_end_session(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertFalse(ended)
+
     def test_transition_more_advances_chunk(self):
         session = UssdSession(
             state="situation_detail",
