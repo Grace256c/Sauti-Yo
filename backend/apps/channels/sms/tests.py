@@ -374,8 +374,11 @@ class HandleSmsRequestTests(TestCase):
 
     @patch("apps.channels.sms.handler.send_sms")
     def test_situation_keyword_sends_normal_reply(self, mock_send):
+        # home-safety is high_risk, so the first message about it triggers
+        # the safety check-in question first (see SafetyCheckinTests);
+        # answering it resolves to the normal situation reply.
         handle_sms_request("+256700000000", "My husband beats me")
-        mock_send.assert_called_once()
+        handle_sms_request("+256700000000", "yes")
         phone, message = mock_send.call_args[0]
         self.assertEqual(phone, "+256700000000")
         self.assertIn("Sauti 116 - Child & GBV Helpline", message)
@@ -567,15 +570,21 @@ class AiFallbackTests(TestCase):
         _create_home_safety_situation()
         cache.clear()
 
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
     @patch("apps.channels.sms.handler.ai_classifier.classify_situation")
     @patch("apps.channels.sms.handler.send_sms")
     def test_ai_classified_slug_sends_situation_reply(
-        self, mock_send, mock_classify
+        self, mock_send, mock_classify, mock_reword
     ):
+        # home-safety is high_risk, so the first message about it triggers
+        # the safety check-in question first (see SafetyCheckinTests);
+        # answering it resolves to the normal situation reply.
+        mock_reword.return_value = None
         mock_classify.return_value = "home-safety"
         handle_sms_request(
             "+256700000000", "I'm scared of my spouse and don't know what to do"
         )
+        handle_sms_request("+256700000000", "yes")
         message = mock_send.call_args[0][1]
         self.assertIn("Sauti 116 - Child & GBV Helpline", message)
 
@@ -742,3 +751,142 @@ class RewordReplyTests(TestCase):
         )
         result = ai_classifier.reword_reply("You're not alone in this.")
         self.assertEqual(result, "I'm here for you.")
+
+
+@override_settings(LLM_API_KEY="")
+class SafetyCheckinTests(TestCase):
+    """
+    LLM_API_KEY is pinned empty at the class level so every test here is
+    safe from hitting the real Anthropic API by default - several of
+    these tests exercise paths (a non-high-risk reply, a topic switch,
+    a post-danger-word follow-up) that reach reword_reply()/
+    classify_situation() without explicitly mocking them. Tests that DO
+    need to control the AI's behavior mock it explicitly via @patch,
+    which overrides this regardless of the empty key.
+    """
+
+    def setUp(self):
+        _create_home_safety_situation()
+        cache.clear()
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_new_high_risk_topic_sends_only_checkin_question(self, mock_send):
+        handle_sms_request("+256700000000", "my husband beats me")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.SAFETY_CHECKIN_QUESTION)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertTrue(context.pending_safety_check)
+        self.assertEqual(context.last_situation_slug, "home-safety")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_non_high_risk_topic_skips_checkin(self, mock_send):
+        _create_land_situation_without_safety_response()
+        handle_sms_request("+256700000000", "they want to evict me from my land")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertFalse(context.pending_safety_check)
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.SAFETY_CHECKIN_QUESTION)
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_repeat_message_about_same_pending_topic_does_not_retrigger_checkin(
+        self, mock_send, mock_reword
+    ):
+        mock_reword.return_value = None
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "my husband beats me")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertNotEqual(second_message, templates.SAFETY_CHECKIN_QUESTION)
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_pending_checkin_answered_unsafe_sends_verbatim_safety_reply(
+        self, mock_send, mock_reword
+    ):
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "unsafe")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertEqual(second_message, "Your safety matters. Call Sauti 116.")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertFalse(context.pending_safety_check)
+        mock_reword.assert_not_called()
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_pending_checkin_answered_no_sends_verbatim_safety_reply(
+        self, mock_send
+    ):
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "no")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertEqual(second_message, "Your safety matters. Call Sauti 116.")
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_pending_checkin_answered_yes_sends_situation_reply(
+        self, mock_send, mock_reword
+    ):
+        mock_reword.return_value = None
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "yes")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertIn("Sauti 116 - Child & GBV Helpline", second_message)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertFalse(context.pending_safety_check)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_pending_checkin_answered_with_different_topic_switches_topic(
+        self, mock_send
+    ):
+        _create_problem_at_work_situation()
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "I was fired from my job")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertIn("Identify the workplace issue", second_message)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.last_situation_slug, "problem-at-work")
+        self.assertFalse(context.pending_safety_check)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_danger_word_while_checkin_pending_still_gets_safety_reply_and_clears_flag(
+        self, mock_send
+    ):
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "there's a weapon here")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertEqual(second_message, "Your safety matters. Call Sauti 116.")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertFalse(context.pending_safety_check)
+        # A follow-up message must not be mis-interpreted as answering a
+        # question that, in effect, was already answered.
+        handle_sms_request("+256700000000", "yes")
+        third_message = mock_send.call_args_list[2][0][1]
+        self.assertNotEqual(third_message, "Your safety matters. Call Sauti 116.")
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_normal_mode_reply_uses_reworded_text_when_available(
+        self, mock_send, mock_reword
+    ):
+        mock_reword.return_value = "A warmer version of the same message."
+        _create_problem_at_work_situation()
+        handle_sms_request("+256700000000", "I was fired from my job")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, "A warmer version of the same message.")
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_normal_mode_reply_falls_back_to_template_when_reword_fails(
+        self, mock_send, mock_reword
+    ):
+        mock_reword.return_value = None
+        _create_problem_at_work_situation()
+        handle_sms_request("+256700000000", "I was fired from my job")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Identify the workplace issue", message)
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_discreet_mode_reply_is_never_reworded(self, mock_send, mock_reword):
+        _create_problem_at_work_situation()
+        handle_sms_request("+256700000000", "I was fired from my job discreet")
+        mock_reword.assert_not_called()

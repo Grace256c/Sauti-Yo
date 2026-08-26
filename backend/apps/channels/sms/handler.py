@@ -37,17 +37,51 @@ def _send(phone_number, message):
     send_sms(phone_number, message)
 
 
+def _compose_situation_reply(detail, mode):
+    template_text = templates.build_situation_reply(detail, mode)
+    if mode == "discreet":
+        return template_text
+    reworded = ai_classifier.reword_reply(template_text)
+    return reworded or template_text
+
+
+def _clear_pending_safety_check(phone_number):
+    SmsContext.objects.filter(
+        phone_number=phone_number, pending_safety_check=True
+    ).update(pending_safety_check=False)
+
+
 def _reply_to_situation(phone_number, slug, text):
     detail = get_situation_detail(slug)
     if detail is None:
         _send(phone_number, templates.build_unmatched_reply())
         return
     discreet = keywords.match_discreet(text)
+
+    existing = _live_context(phone_number)
+    is_new_topic = existing is None or existing.last_situation_slug != slug
+
+    if is_new_topic and detail["risk_level"] == "high_risk":
+        _send(phone_number, templates.SAFETY_CHECKIN_QUESTION)
+        SmsContext.objects.update_or_create(
+            phone_number=phone_number,
+            defaults={
+                "last_situation_slug": slug,
+                "discreet": discreet,
+                "pending_safety_check": True,
+            },
+        )
+        return
+
     mode = "discreet" if discreet else "normal"
-    _send(phone_number, templates.build_situation_reply(detail, mode))
+    _send(phone_number, _compose_situation_reply(detail, mode))
     SmsContext.objects.update_or_create(
         phone_number=phone_number,
-        defaults={"last_situation_slug": slug, "discreet": discreet},
+        defaults={
+            "last_situation_slug": slug,
+            "discreet": discreet,
+            "pending_safety_check": False,
+        },
     )
 
 
@@ -58,7 +92,16 @@ def handle_sms_request(phone_number, text):
     if keywords.match_danger(text):
         detail = _live_context_detail(phone_number)
         _send(phone_number, templates.build_safety_reply(detail))
+        _clear_pending_safety_check(phone_number)
         return
+
+    pending = _live_context(phone_number)
+    if pending is not None and pending.pending_safety_check:
+        if keywords.match_not_safe_answer(text):
+            detail = get_situation_detail(pending.last_situation_slug)
+            _send(phone_number, templates.build_safety_reply(detail))
+            _clear_pending_safety_check(phone_number)
+            return
 
     if keywords.match_help(text):
         _send(phone_number, templates.build_support_reply(None))
@@ -89,6 +132,17 @@ def handle_sms_request(phone_number, text):
     slug = ai_classifier.classify_situation(text)
     if slug:
         _reply_to_situation(phone_number, slug, text)
+        return
+
+    pending = _live_context(phone_number)
+    if pending is not None and pending.pending_safety_check:
+        detail = get_situation_detail(pending.last_situation_slug)
+        _clear_pending_safety_check(phone_number)
+        if detail is None:
+            _send(phone_number, templates.build_unmatched_reply())
+            return
+        mode = "discreet" if pending.discreet else "normal"
+        _send(phone_number, _compose_situation_reply(detail, mode))
         return
 
     _send(phone_number, templates.build_unmatched_reply())
