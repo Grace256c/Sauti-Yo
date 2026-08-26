@@ -259,3 +259,216 @@ def transition_situation_detail(session, user_input):
         if 1 <= choice <= len(topics):
             return _enter_topic(situation.slug, topics[choice - 1])
     return None
+
+
+def _back_to_topic_detail(situation_slug, topic_slug):
+    return "topic_detail", {
+        "situation_slug": situation_slug,
+        "topic_slug": topic_slug,
+        "chunk_index": 9999,
+    }
+
+
+def _back_from_topic(situation_slug, topic_slug):
+    situation = Situation.objects.filter(
+        slug=situation_slug, is_active=True
+    ).first()
+    if situation is None:
+        return "situation_list", {"page": 0}
+    topics = list(_topics_for_situation(situation)[:9])
+    if len(topics) <= 1:
+        return "situation_list", {"page": 0}
+    return (
+        "situation_detail",
+        {"situation_slug": situation_slug, "chunk_index": 9999},
+    )
+
+
+def render_topic_detail(session):
+    topic = RightsTopic.objects.filter(
+        slug=session.context.get("topic_slug"), is_active=True
+    ).first()
+    if topic is None:
+        return get_copy("ussd.not_found", session.language), False
+
+    chunk_index = session.context.get("chunk_index", 0)
+    menu = get_copy("ussd.topic_menu", session.language)
+    text = topic.summary or topic.title
+    return _chunked_screen(text, chunk_index, menu, session.language)
+
+
+def transition_topic_detail(session, user_input):
+    situation_slug = session.context.get("situation_slug")
+    topic_slug = session.context.get("topic_slug")
+    topic = RightsTopic.objects.filter(slug=topic_slug, is_active=True).first()
+    if topic is None:
+        return "situation_list", {"page": 0}
+
+    chunk_index = session.context.get("chunk_index", 0)
+    text = topic.summary or topic.title
+    is_last = _is_last_chunk(text, chunk_index)
+
+    if not is_last:
+        if user_input == "1":
+            return (
+                "topic_detail",
+                {**session.context, "chunk_index": chunk_index + 1},
+            )
+        if user_input == "0":
+            return _back_from_topic(situation_slug, topic_slug)
+        return None
+
+    if user_input == "1":
+        return (
+            "action_steps",
+            {
+                "situation_slug": situation_slug,
+                "topic_slug": topic_slug,
+                "step_index": 0,
+                "chunk_index": 0,
+            },
+        )
+    if user_input == "2":
+        return (
+            "support_contacts",
+            {
+                "situation_slug": situation_slug,
+                "topic_slug": topic_slug,
+                "chunk_index": 0,
+            },
+        )
+    if user_input == "0":
+        return _back_from_topic(situation_slug, topic_slug)
+    return None
+
+
+def render_safety_gate(session):
+    topic = RightsTopic.objects.filter(
+        slug=session.context.get("topic_slug"), is_active=True
+    ).first()
+    if topic is None:
+        return get_copy("ussd.not_found", session.language), False
+
+    safety = topic.safety_responses.filter(
+        trigger_key="default", is_active=True
+    ).first()
+    message = safety.message if safety else topic.summary or topic.title
+    chunk_index = session.context.get("chunk_index", 0)
+    options = get_copy("ussd.safety_continue", session.language)
+    return _chunked_screen(message, chunk_index, options, session.language)
+
+
+def transition_safety_gate(session, user_input):
+    situation_slug = session.context.get("situation_slug")
+    topic_slug = session.context.get("topic_slug")
+    topic = RightsTopic.objects.filter(slug=topic_slug, is_active=True).first()
+    if topic is None:
+        return "situation_list", {"page": 0}
+
+    safety = topic.safety_responses.filter(
+        trigger_key="default", is_active=True
+    ).first()
+    message = safety.message if safety else topic.summary or topic.title
+    chunk_index = session.context.get("chunk_index", 0)
+    is_last = _is_last_chunk(message, chunk_index)
+
+    if not is_last:
+        if user_input == "1":
+            return (
+                "safety_gate",
+                {**session.context, "chunk_index": chunk_index + 1},
+            )
+        if user_input == "0":
+            return _back_from_topic(situation_slug, topic_slug)
+        return None
+
+    if user_input == "1":
+        return (
+            "topic_detail",
+            {
+                "situation_slug": situation_slug,
+                "topic_slug": topic_slug,
+                "chunk_index": 0,
+            },
+        )
+    if user_input == "0":
+        return _back_from_topic(situation_slug, topic_slug)
+    return None
+
+
+def render_action_steps(session):
+    topic = RightsTopic.objects.filter(
+        slug=session.context.get("topic_slug"), is_active=True
+    ).first()
+    if topic is None:
+        return get_copy("ussd.not_found", session.language), False
+
+    steps = list(
+        topic.action_steps.filter(is_active=True).order_by("order", "id")
+    )
+    back_label = get_copy("ussd.back", session.language)
+    if not steps:
+        body = get_copy("ussd.no_action_steps", session.language)
+        return f"{body}\n\n0. {back_label}", False
+
+    step_index = min(session.context.get("step_index", 0), len(steps) - 1)
+    step = steps[step_index]
+    text = f"Step {step_index + 1}/{len(steps)}: {step.title}\n{step.description}"
+    chunk_index = session.context.get("chunk_index", 0)
+
+    has_next = step_index + 1 < len(steps)
+    if has_next:
+        next_label = get_copy("ussd.next", session.language)
+        trailing = f"1. {next_label}\n0. {back_label}"
+    else:
+        trailing = f"0. {back_label}"
+
+    screen, _ = _chunked_screen(text, chunk_index, trailing, session.language)
+    return screen, False
+
+
+def transition_action_steps(session, user_input):
+    situation_slug = session.context.get("situation_slug")
+    topic_slug = session.context.get("topic_slug")
+    topic = RightsTopic.objects.filter(slug=topic_slug, is_active=True).first()
+    if topic is None:
+        return "situation_list", {"page": 0}
+
+    steps = list(
+        topic.action_steps.filter(is_active=True).order_by("order", "id")
+    )
+    if not steps:
+        if user_input == "0":
+            return _back_to_topic_detail(situation_slug, topic_slug)
+        return None
+
+    step_index = min(session.context.get("step_index", 0), len(steps) - 1)
+    step = steps[step_index]
+    text = f"Step {step_index + 1}/{len(steps)}: {step.title}\n{step.description}"
+    chunk_index = session.context.get("chunk_index", 0)
+    is_last = _is_last_chunk(text, chunk_index)
+    has_next = step_index + 1 < len(steps)
+
+    if not is_last:
+        if user_input == "1":
+            return (
+                "action_steps",
+                {**session.context, "chunk_index": chunk_index + 1},
+            )
+        if user_input == "0":
+            return _back_to_topic_detail(situation_slug, topic_slug)
+        return None
+
+    if has_next and user_input == "1":
+        return (
+            "action_steps",
+            {
+                "situation_slug": situation_slug,
+                "topic_slug": topic_slug,
+                "step_index": step_index + 1,
+                "chunk_index": 0,
+            },
+        )
+    if user_input == "0":
+        return _back_to_topic_detail(situation_slug, topic_slug)
+    return None

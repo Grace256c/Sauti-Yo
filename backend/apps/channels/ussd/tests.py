@@ -374,3 +374,153 @@ class SituationDetailTests(TestCase):
 
         self.assertEqual(next_state, "safety_gate")
         self.assertEqual(context["topic_slug"], "topic-a")
+
+
+from apps.rights.models import ActionStep, SafetyResponse
+
+
+class TopicDetailTests(TestCase):
+    def setUp(self):
+        self.topic = RightsTopic.objects.create(
+            slug="topic-a", title="Topic A", summary="Summary text. " * 20
+        )
+
+    def _session(self, chunk_index=0, situation_slug="eviction"):
+        return UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": situation_slug,
+                "topic_slug": "topic-a",
+                "chunk_index": chunk_index,
+            },
+        )
+
+    def test_render_shows_summary_chunk_with_more(self):
+        text, ended = menus.render_topic_detail(self._session(0))
+        self.assertIn("1. More", text)
+        self.assertFalse(ended)
+
+    def test_render_last_chunk_shows_topic_menu(self):
+        text, ended = menus.render_topic_detail(self._session(9999))
+        self.assertIn("1. Action steps", text)
+        self.assertIn("2. Support contacts", text)
+
+    def test_transition_selects_action_steps(self):
+        next_state, context = menus.transition_topic_detail(
+            self._session(9999), "1"
+        )
+        self.assertEqual(next_state, "action_steps")
+        self.assertEqual(context["step_index"], 0)
+        self.assertEqual(context["chunk_index"], 0)
+
+    def test_transition_selects_support_contacts(self):
+        next_state, context = menus.transition_topic_detail(
+            self._session(9999), "2"
+        )
+        self.assertEqual(next_state, "support_contacts")
+
+    def test_transition_back_with_no_situation_returns_situation_list(self):
+        next_state, context = menus.transition_topic_detail(
+            self._session(9999), "0"
+        )
+        self.assertEqual(next_state, "situation_list")
+
+
+class SafetyGateTests(TestCase):
+    def setUp(self):
+        self.topic = RightsTopic.objects.create(
+            slug="high-risk-topic",
+            title="High Risk Topic",
+            summary="Summary",
+            risk_level="high_risk",
+        )
+        self.safety = SafetyResponse.objects.create(
+            rights_topic=self.topic,
+            trigger_key="default",
+            message="Call the emergency line immediately. " * 10,
+        )
+
+    def _session(self, chunk_index=0):
+        return UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "high-risk-topic",
+                "chunk_index": chunk_index,
+            },
+        )
+
+    def test_render_shows_safety_message(self):
+        text, ended = menus.render_safety_gate(self._session(0))
+        self.assertIn("Call the emergency line", text)
+        self.assertFalse(ended)
+
+    def test_transition_continue_on_last_chunk_moves_to_topic_detail(self):
+        next_state, context = menus.transition_safety_gate(
+            self._session(9999), "1"
+        )
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 0)
+
+    def test_transition_rejects_invalid_choice_on_last_chunk(self):
+        self.assertIsNone(menus.transition_safety_gate(self._session(9999), "9"))
+
+
+class ActionStepsTests(TestCase):
+    def setUp(self):
+        self.topic = RightsTopic.objects.create(
+            slug="topic-a", title="Topic A", summary="S"
+        )
+        self.step1 = ActionStep.objects.create(
+            rights_topic=self.topic,
+            order=1,
+            title="Step One",
+            description="Do this first.",
+        )
+        self.step2 = ActionStep.objects.create(
+            rights_topic=self.topic,
+            order=2,
+            title="Step Two",
+            description="Do this second.",
+        )
+
+    def _session(self, step_index=0, chunk_index=0):
+        return UssdSession(
+            state="action_steps",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "topic-a",
+                "step_index": step_index,
+                "chunk_index": chunk_index,
+            },
+        )
+
+    def test_render_shows_first_step_with_next_option(self):
+        text, ended = menus.render_action_steps(self._session())
+        self.assertIn("Step 1/2", text)
+        self.assertIn("1.", text)
+        self.assertFalse(ended)
+
+    def test_render_last_step_has_no_next_option(self):
+        text, ended = menus.render_action_steps(self._session(step_index=1))
+        self.assertIn("Step 2/2", text)
+        self.assertNotIn("1.", text)
+
+    def test_transition_next_moves_to_second_step(self):
+        next_state, context = menus.transition_action_steps(self._session(), "1")
+        self.assertEqual(next_state, "action_steps")
+        self.assertEqual(context["step_index"], 1)
+        self.assertEqual(context["chunk_index"], 0)
+
+    def test_transition_back_returns_to_topic_detail(self):
+        next_state, context = menus.transition_action_steps(self._session(), "0")
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 9999)
+
+    def test_render_with_no_steps_shows_empty_message(self):
+        ActionStep.objects.all().delete()
+        text, ended = menus.render_action_steps(self._session())
+        self.assertIn("No action steps", text)
