@@ -185,3 +185,170 @@ class GoodbyeTests(TestCase):
         text, ended = menus.render_goodbye(session)
         self.assertIn("Thank you", text)
         self.assertTrue(ended)
+
+
+from apps.rights.models import RightsTopic, Situation, SituationRightsTopic
+
+
+class SituationListTests(TestCase):
+    def setUp(self):
+        self.situations = [
+            Situation.objects.create(slug=f"situation-{i}", title=f"Situation {i}")
+            for i in range(7)
+        ]
+
+    def test_render_lists_first_page_with_more_option(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        text, ended = menus.render_situation_list(session)
+        self.assertIn("1. Situation 0", text)
+        self.assertIn("5. Situation 4", text)
+        self.assertIn("8.", text)
+        self.assertFalse(ended)
+
+    def test_render_last_page_has_no_more_option(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 1}
+        )
+        text, ended = menus.render_situation_list(session)
+        self.assertIn("Situation 5", text)
+        self.assertNotIn("8.", text)
+
+    def test_render_with_no_situations_shows_empty_message(self):
+        Situation.objects.all().delete()
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        text, ended = menus.render_situation_list(session)
+        self.assertIn("No situations", text)
+
+    def test_transition_selects_situation_with_single_topic_skips_to_topic(self):
+        situation = self.situations[0]
+        topic = RightsTopic.objects.create(
+            slug="topic-1", title="Topic 1", summary="Summary"
+        )
+        SituationRightsTopic.objects.create(
+            situation=situation, rights_topic=topic
+        )
+
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_situation_list(session, "1")
+
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["topic_slug"], "topic-1")
+        self.assertEqual(context["situation_slug"], "situation-0")
+
+    def test_transition_selects_situation_with_multiple_topics_shows_detail(self):
+        situation = self.situations[0]
+        for i in range(2):
+            topic = RightsTopic.objects.create(
+                slug=f"multi-topic-{i}", title=f"Topic {i}", summary="Summary"
+            )
+            SituationRightsTopic.objects.create(
+                situation=situation, rights_topic=topic
+            )
+
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_situation_list(session, "1")
+
+        self.assertEqual(next_state, "situation_detail")
+        self.assertEqual(
+            context, {"situation_slug": "situation-0", "chunk_index": 0}
+        )
+
+    def test_transition_next_page(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_situation_list(session, "8")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 1})
+
+    def test_transition_back_to_main_menu(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_situation_list(session, "0")
+        self.assertEqual(next_state, "main_menu")
+
+    def test_transition_rejects_invalid_choice(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        self.assertIsNone(menus.transition_situation_list(session, "9"))
+
+
+class SituationDetailTests(TestCase):
+    def setUp(self):
+        self.situation = Situation.objects.create(
+            slug="eviction",
+            title="Eviction",
+            description="Long description. " * 20,
+        )
+        self.topic_a = RightsTopic.objects.create(
+            slug="topic-a", title="Topic A", summary="Summary A"
+        )
+        self.topic_b = RightsTopic.objects.create(
+            slug="topic-b", title="Topic B", summary="Summary B"
+        )
+        SituationRightsTopic.objects.create(
+            situation=self.situation, rights_topic=self.topic_a
+        )
+        SituationRightsTopic.objects.create(
+            situation=self.situation, rights_topic=self.topic_b
+        )
+
+    def test_render_shows_description_chunk_and_more_option(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 0},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertIn("1. More", text)
+        self.assertFalse(ended)
+
+    def test_render_last_chunk_lists_topics(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertIn("1. Topic A", text)
+        self.assertIn("2. Topic B", text)
+
+    def test_transition_more_advances_chunk(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 0},
+        )
+        next_state, context = menus.transition_situation_detail(session, "1")
+        self.assertEqual(next_state, "situation_detail")
+        self.assertEqual(context["chunk_index"], 1)
+
+    def test_transition_selects_topic_on_last_chunk(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        next_state, context = menus.transition_situation_detail(session, "1")
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["topic_slug"], "topic-a")
+
+    def test_transition_back_returns_to_situation_list(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        next_state, context = menus.transition_situation_detail(session, "0")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
