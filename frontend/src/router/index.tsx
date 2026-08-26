@@ -17,6 +17,7 @@ import {
 
 import AppShell from "../components/layout/AppShell";
 import PartnerShell from "../components/partner/PartnerShell";
+import PartnerRouteGuard from "../components/partner/PartnerRouteGuard";
 
 /* =========================================================
    CITIZEN PAGES
@@ -37,11 +38,13 @@ import Support from "../pages/citizen/Support";
    PARTNER PAGES
 ========================================================= */
 
+import PartnerLogin from "../pages/partner/PartnerLogin";
 import PartnerDashboard from "../pages/partner/PartnerDashboard";
 import PartnerProfile from "../pages/partner/PartnerProfile";
 import PartnerServices from "../pages/partner/PartnerServices";
 import PartnerVerification from "../pages/partner/PartnerVerification";
 import PartnerReferrals from "../pages/partner/PartnerReferrals";
+import PartnerReferralDetail from "../pages/partner/PartnerReferralDetail";
 import PartnerSettings from "../pages/partner/PartnerSettings";
 
 /* =========================================================
@@ -320,12 +323,22 @@ export const router =
       ],
     },
 
+    /* PARTNER LOGIN */
+    {
+      path: "/partner/login",
+      element: <PartnerLogin />,
+    },
+
     /* PARTNER PORTAL */
     {
-      path: "/partner",
-      element: <PartnerShell />,
+      element: <PartnerRouteGuard />,
 
       children: [
+        {
+          path: "/partner",
+          element: <PartnerShell />,
+
+          children: [
         {
           index: true,
           element: (
@@ -362,10 +375,19 @@ export const router =
         },
 
         {
+          path: "referrals/:referralId",
+          element: (
+            <PartnerReferralDetail />
+          ),
+        },
+
+        {
           path: "settings",
           element: (
             <PartnerSettings />
           ),
+        },
+          ],
         },
       ],
     },

@@ -1,59 +1,55 @@
 import {
+  AlertCircle,
   ArrowRight,
   Building2,
   CheckCircle2,
   Circle,
   Clock3,
   Inbox,
+  LoaderCircle,
   Scale,
   ShieldCheck,
 } from "lucide-react";
-import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  Link,
+} from "react-router-dom";
+
+import {
+  usePartnerAuth,
+} from "../../context/PartnerAuthContext";
+
+import {
+  ApiError,
+} from "../../services/api";
+
+import {
+  getPartnerOrganisation,
+  getPartnerServices,
+  getPartnerVerification,
+} from "../../services/partners";
+
+import {
+  getReferrals,
+} from "../../services/referrals";
+
+import type {
+  PartnerOrganisation,
+  PartnerServiceConfiguration,
+  PartnerVerification,
+} from "../../services/partners";
+
+import type {
+  Referral,
+} from "../../services/referrals";
 
 /* =========================================================
-   LOCAL TYPES
-
-   These mirror the browser-session draft structures used
-   by PartnerProfile.tsx and PartnerServices.tsx.
-
-   Later, once the backend is connected, this dashboard
-   should read the authenticated partner record instead.
+   TYPES
 ========================================================= */
-
-type SavedProfile = {
-  organisationName?: string;
-  organisationType?: string;
-  registrationNumber?: string;
-  yearEstablished?: string;
-  description?: string;
-
-  contactName?: string;
-  contactRole?: string;
-  contactEmail?: string;
-  contactPhone?: string;
-
-  headquartersDistrict?: string;
-  physicalAddress?: string;
-  areasServed?: string[];
-
-  website?: string;
-  publicEmail?: string;
-  publicPhone?: string;
-};
-
-type SavedServices = {
-  categories?: string[];
-  supportTypes?: string[];
-  languages?: string[];
-  supportChannels?: string[];
-  districtsServed?: string[];
-  nationwide?: boolean;
-  freeServices?: boolean;
-  appointmentRequired?: boolean;
-  serviceDescription?: string;
-  acceptingReferrals?: boolean;
-};
 
 type SetupStatus =
   | "complete"
@@ -62,110 +58,7 @@ type SetupStatus =
   | "locked";
 
 /* =========================================================
-   SESSION STORAGE HELPERS
-========================================================= */
-
-function readSessionDraft<T>(
-  key: string,
-): T | null {
-  try {
-    const stored =
-      sessionStorage.getItem(key);
-
-    if (!stored) {
-      return null;
-    }
-
-    return JSON.parse(stored) as T;
-  } catch {
-    return null;
-  }
-}
-
-/* =========================================================
-   PROFILE COMPLETION
-
-   Uses the same required fields as PartnerProfile.tsx.
-========================================================= */
-
-function calculateProfileCompletion(
-  profile: SavedProfile | null,
-) {
-  if (!profile) {
-    return 0;
-  }
-
-  const requiredFields = [
-    profile.organisationName,
-    profile.organisationType,
-    profile.description,
-    profile.contactName,
-    profile.contactRole,
-    profile.contactEmail,
-    profile.contactPhone,
-    profile.headquartersDistrict,
-    profile.physicalAddress,
-  ];
-
-  const completeFields =
-    requiredFields.filter(
-      (value) =>
-        typeof value === "string" &&
-        value.trim() !== "",
-    ).length;
-
-  return Math.round(
-    (completeFields /
-      requiredFields.length) *
-      100,
-  );
-}
-
-/* =========================================================
-   SERVICES COMPLETION
-
-   Uses the same six setup checks as PartnerServices.tsx.
-========================================================= */
-
-function calculateServicesCompletion(
-  services: SavedServices | null,
-) {
-  if (!services) {
-    return 0;
-  }
-
-  const checks = [
-    (services.categories?.length ?? 0) >
-      0,
-
-    (services.supportTypes?.length ??
-      0) > 0,
-
-    (services.languages?.length ?? 0) >
-      0,
-
-    (services.supportChannels?.length ??
-      0) > 0,
-
-    Boolean(services.nationwide) ||
-      (services.districtsServed?.length ??
-        0) > 0,
-
-    Boolean(
-      services.serviceDescription?.trim(),
-    ),
-  ];
-
-  const complete =
-    checks.filter(Boolean).length;
-
-  return Math.round(
-    (complete / checks.length) * 100,
-  );
-}
-
-/* =========================================================
-   STATUS HELPER
+   HELPERS
 ========================================================= */
 
 function getSetupStatus(
@@ -182,73 +75,352 @@ function getSetupStatus(
   return "not-started";
 }
 
+function formatStatus(
+  status: string,
+) {
+  return status
+    .split("_")
+    .map(
+      (part) =>
+        part.charAt(0).toUpperCase() +
+        part.slice(1),
+    )
+    .join(" ");
+}
+
+function formatDate(
+  value?: string | null,
+) {
+  if (!value) {
+    return "—";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value;
+  }
+
+  return date.toLocaleDateString(
+    undefined,
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    },
+  );
+}
+
 /* =========================================================
-   DASHBOARD
+   PAGE
 ========================================================= */
 
 export default function PartnerDashboard() {
-  /*
-   * Read the current browser-session drafts.
-   *
-   * Because the dashboard component mounts whenever the
-   * partner navigates back to /partner, it picks up the most
-   * recently saved Profile and Services drafts.
-   */
-  const profile = useMemo(
-    () =>
-      readSessionDraft<SavedProfile>(
-        "sauti-yo-partner-profile-draft",
-      ),
-    [],
-  );
+  const {
+    session,
+  } = usePartnerAuth();
 
-  const services = useMemo(
-    () =>
-      readSessionDraft<SavedServices>(
-        "sauti-yo-partner-services-draft",
-      ),
-    [],
-  );
+  const organisationId =
+    session?.membership.organisation_id;
+
+  const [
+    organisation,
+    setOrganisation,
+  ] =
+    useState<PartnerOrganisation | null>(
+      null,
+    );
+
+  const [
+    services,
+    setServices,
+  ] =
+    useState<PartnerServiceConfiguration | null>(
+      null,
+    );
+
+  const [
+    verification,
+    setVerification,
+  ] =
+    useState<PartnerVerification | null>(
+      null,
+    );
+
+  const [
+    referrals,
+    setReferrals,
+  ] =
+    useState<Referral[]>(
+      [],
+    );
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true);
+
+  const [
+    error,
+    setError,
+  ] =
+    useState("");
+
+  /* =======================================================
+     LOAD REAL BACKEND DATA
+  ======================================================= */
+
+  useEffect(() => {
+    if (!organisationId) {
+      setLoading(false);
+      return;
+    }
+
+    const activeOrganisationId =
+      organisationId;
+
+    let active = true;
+
+    async function loadDashboard() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const [
+          organisationData,
+          servicesData,
+          verificationData,
+          referralData,
+        ] =
+          await Promise.all([
+            getPartnerOrganisation(
+              activeOrganisationId,
+            ),
+
+            getPartnerServices(
+              activeOrganisationId,
+            ),
+
+            getPartnerVerification(
+              activeOrganisationId,
+            ),
+
+            getReferrals(),
+          ]);
+
+        if (!active) {
+          return;
+        }
+
+        setOrganisation(
+          organisationData,
+        );
+
+        setServices(
+          servicesData,
+        );
+
+        setVerification(
+          verificationData,
+        );
+
+        setReferrals(
+          referralData,
+        );
+      } catch (caughtError) {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caughtError instanceof
+          ApiError
+        ) {
+          setError(
+            caughtError.message,
+          );
+        } else {
+          setError(
+            "Unable to load the partner dashboard.",
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadDashboard();
+
+    return () => {
+      active = false;
+    };
+  }, [organisationId]);
+
+  /* =======================================================
+     PROFILE COMPLETION
+  ======================================================= */
 
   const profileCompletion =
-    calculateProfileCompletion(profile);
+    useMemo(() => {
+      if (!organisation) {
+        return 0;
+      }
+
+      const requiredValues = [
+        organisation
+          .support_service
+          .name,
+
+        organisation
+          .organisation_type,
+
+        organisation
+          .support_service
+          .description,
+
+        organisation
+          .headquarters_district,
+
+        organisation
+          .physical_address,
+      ];
+
+      const complete =
+        requiredValues.filter(
+          (value) =>
+            String(
+              value ?? "",
+            ).trim() !== "",
+        ).length;
+
+      return Math.round(
+        (
+          complete /
+          requiredValues.length
+        ) * 100,
+      );
+    }, [organisation]);
+
+  /* =======================================================
+     SERVICES COMPLETION
+  ======================================================= */
 
   const servicesCompletion =
-    calculateServicesCompletion(services);
+    useMemo(() => {
+      if (!services) {
+        return 0;
+      }
 
-  /*
-   * Verification is not wired yet.
-   *
-   * We deliberately keep it at 0 rather than pretending
-   * that an organisation has submitted or passed review.
-   */
-  const verificationCompletion = 0;
+      const checks = [
+        services
+          .rights_categories
+          .length > 0,
 
-  const overallCompletion = Math.round(
-    (profileCompletion +
-      servicesCompletion +
-      verificationCompletion) /
-      3,
-  );
+        services
+          .support_types
+          .length > 0,
+
+        services
+          .service_description
+          .trim() !== "",
+
+        services
+          .languages
+          .length > 0,
+
+        services
+          .support_channels
+          .length > 0,
+
+        services.nationwide ||
+          services
+            .districts_served
+            .length > 0,
+      ];
+
+      const complete =
+        checks.filter(
+          Boolean,
+        ).length;
+
+      return Math.round(
+        (
+          complete /
+          checks.length
+        ) * 100,
+      );
+    }, [services]);
+
+  /* =======================================================
+     VERIFICATION
+  ======================================================= */
+
+  const verificationCompletion =
+    useMemo(() => {
+      if (!verification) {
+        return 0;
+      }
+
+      if (
+        verification.status ===
+        "verified"
+      ) {
+        return 100;
+      }
+
+      if (
+        [
+          "submitted",
+          "under_review",
+        ].includes(
+          verification.status,
+        )
+      ) {
+        return 80;
+      }
+
+      return 25;
+    }, [verification]);
+
+  const verificationStatus:
+    SetupStatus =
+      verification?.status ===
+      "verified"
+        ? "complete"
+        : verification
+          ? "in-progress"
+          : profileCompletion ===
+                100 &&
+              servicesCompletion ===
+                100
+            ? "not-started"
+            : "locked";
 
   const profileStatus =
-    getSetupStatus(profileCompletion);
+    getSetupStatus(
+      profileCompletion,
+    );
 
   const servicesStatus =
-    getSetupStatus(servicesCompletion);
-
-  const verificationStatus: SetupStatus =
-    profileCompletion === 100 &&
-    servicesCompletion === 100
-      ? "not-started"
-      : "locked";
+    getSetupStatus(
+      servicesCompletion,
+    );
 
   const completedSteps = [
     profileStatus,
     servicesStatus,
     verificationStatus,
   ].filter(
-    (status) => status === "complete",
+    (status) =>
+      status === "complete",
   ).length;
 
   const startedSteps = [
@@ -261,38 +433,113 @@ export default function PartnerDashboard() {
       status === "in-progress",
   ).length;
 
+  const overallCompletion =
+    Math.round(
+      (
+        profileCompletion +
+        servicesCompletion +
+        verificationCompletion
+      ) / 3,
+    );
+
+  /* =======================================================
+     REFERRALS
+  ======================================================= */
+
+  const newReferrals =
+    referrals.filter(
+      (referral) =>
+        referral.status === "new",
+    ).length;
+
+  const completedReferrals =
+    referrals.filter(
+      (referral) =>
+        referral.status ===
+        "completed",
+    ).length;
+
+  const recentReferrals =
+    useMemo(
+      () =>
+        [...referrals]
+          .sort(
+            (a, b) =>
+              new Date(
+                b.created_at ?? 0,
+              ).getTime() -
+              new Date(
+                a.created_at ?? 0,
+              ).getTime(),
+          )
+          .slice(0, 3),
+      [referrals],
+    );
+
   const configuredCategories =
-    services?.categories?.length ?? 0;
+    services
+      ?.rights_categories
+      .length ?? 0;
 
   const configuredSupportTypes =
-    services?.supportTypes?.length ?? 0;
+    services
+      ?.support_types
+      .length ?? 0;
 
   const organisationName =
-    profile?.organisationName?.trim();
+    organisation
+      ?.support_service
+      .name
+      ?.trim();
+
+  /* =======================================================
+     NEXT SETUP STEP
+  ======================================================= */
 
   const nextSetupRoute =
     profileCompletion < 100
       ? "/partner/profile"
       : servicesCompletion < 100
         ? "/partner/services"
-        : "/partner/profile";
+        : verification?.status !==
+            "verified"
+          ? "/partner/verification"
+          : "/partner/referrals";
 
   const nextSetupLabel =
     profileCompletion < 100
-      ? profileCompletion > 0
-        ? "Continue Profile"
-        : "Start Profile"
+      ? "Complete Profile"
       : servicesCompletion < 100
-        ? servicesCompletion > 0
-          ? "Continue Services"
-          : "Set Up Services"
-        : "Review Profile";
+        ? "Complete Services"
+        : verification?.status !==
+            "verified"
+          ? "View Verification"
+          : "View Referrals";
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[65vh] items-center justify-center px-5">
+        <div className="text-center">
+          <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-gold" />
+
+          <p className="mt-4 text-sm text-text-secondary">
+            Loading partner dashboard...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
       {/* =====================================================
           PAGE HEADER
       ===================================================== */}
+
       <section className="border-b border-border bg-surface">
         <div className="px-5 py-8 sm:px-8 lg:px-10 lg:py-9 xl:px-12">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -336,12 +583,25 @@ export default function PartnerDashboard() {
       </section>
 
       {/* =====================================================
-          DASHBOARD BODY
+          BODY
       ===================================================== */}
+
       <div className="px-5 py-7 sm:px-8 lg:px-10 lg:py-8 xl:px-12">
+
+        {error && (
+          <div className="mb-5 flex items-start gap-3 border border-danger/30 bg-danger/5 p-4">
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+
+            <p className="text-sm leading-6 text-danger">
+              {error}
+            </p>
+          </div>
+        )}
+
         {/* ===================================================
             PRIMARY SETUP STATUS
         =================================================== */}
+
         <section className="relative overflow-hidden border border-border bg-surface">
           <div className="absolute inset-y-0 left-0 w-1 bg-gold" />
 
@@ -375,24 +635,20 @@ export default function PartnerDashboard() {
                   {overallCompletion <
                     100 && (
                     <span className="block text-gold-deep dark:text-gold">
-                      before receiving
-                      referrals.
+                      before full referral
+                      participation.
                     </span>
                   )}
                 </h2>
 
                 <p className="mt-4 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
-                  Sauti Yo only sends
-                  citizen referrals to
-                  organisations that have
-                  completed their
-                  profile, described
-                  their services and
-                  passed the required
-                  verification process.
+                  Profile, services and
+                  verification information
+                  shown here now comes
+                  directly from the Sauti Yo
+                  backend.
                 </p>
 
-                {/* PROGRESS */}
                 <div className="mt-6 max-w-xl">
                   <div className="flex items-center justify-between text-xs font-semibold">
                     <span className="text-text-secondary">
@@ -409,7 +665,8 @@ export default function PartnerDashboard() {
                     <div
                       className="h-full bg-gold transition-all duration-500"
                       style={{
-                        width: `${overallCompletion}%`,
+                        width:
+                          `${overallCompletion}%`,
                       }}
                     />
                   </div>
@@ -431,13 +688,15 @@ export default function PartnerDashboard() {
         {/* ===================================================
             LIVE STATS
         =================================================== */}
+
         <section className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <DashboardStat
             icon={Building2}
             label="Profile"
             value={`${profileCompletion}%`}
             detail={
-              profileCompletion === 100
+              profileCompletion ===
+              100
                 ? "Required details complete"
                 : "Organisation details"
             }
@@ -448,7 +707,8 @@ export default function PartnerDashboard() {
             label="Services"
             value={`${configuredCategories}`}
             detail={
-              configuredCategories === 1
+              configuredCategories ===
+              1
                 ? "Rights category configured"
                 : "Rights categories configured"
             }
@@ -457,21 +717,22 @@ export default function PartnerDashboard() {
           <DashboardStat
             icon={Inbox}
             label="New referrals"
-            value="0"
+            value={`${newReferrals}`}
             detail="Awaiting review"
           />
 
           <DashboardStat
             icon={CheckCircle2}
             label="Completed"
-            value="0"
-            detail="Closed referrals"
+            value={`${completedReferrals}`}
+            detail="Completed referrals"
           />
         </section>
 
         {/* ===================================================
-            SECONDARY SERVICE SUMMARY
+            SERVICE SUMMARY
         =================================================== */}
+
         {(configuredCategories > 0 ||
           configuredSupportTypes >
             0) && (
@@ -485,13 +746,15 @@ export default function PartnerDashboard() {
                 <p className="mt-2 text-sm font-semibold text-text-primary">
                   {configuredCategories}{" "}
                   rights{" "}
-                  {configuredCategories === 1
+                  {configuredCategories ===
+                  1
                     ? "category"
                     : "categories"}{" "}
                   ·{" "}
                   {configuredSupportTypes}{" "}
                   support{" "}
-                  {configuredSupportTypes === 1
+                  {configuredSupportTypes ===
+                  1
                     ? "type"
                     : "types"}
                 </p>
@@ -512,8 +775,11 @@ export default function PartnerDashboard() {
         {/* ===================================================
             MAIN GRID
         =================================================== */}
+
         <section className="mt-5 grid gap-5 xl:grid-cols-[1.05fr_0.95fr]">
+
           {/* SETUP CHECKLIST */}
+
           <article className="border border-border bg-surface p-6 sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -563,12 +829,16 @@ export default function PartnerDashboard() {
 
               <SetupStep
                 number="03"
-                title="Submit for verification"
+                title="Verification"
                 description={
-                  verificationStatus ===
-                  "locked"
-                    ? "Complete your organisation profile and service configuration before verification becomes available."
-                    : "Your profile and services are ready. Verification submission will be connected when the backend workflow is available."
+                  verification
+                    ? `Current verification status: ${formatStatus(
+                        verification.status,
+                      )}.`
+                    : verificationStatus ===
+                        "locked"
+                      ? "Complete your profile and services before submitting for verification."
+                      : "Your organisation is ready to submit for verification."
                 }
                 status={
                   verificationStatus
@@ -576,11 +846,13 @@ export default function PartnerDashboard() {
                 completion={
                   verificationCompletion
                 }
+                to="/partner/verification"
               />
             </div>
           </article>
 
           {/* RECENT REFERRALS */}
+
           <article className="border border-border bg-surface">
             <div className="flex items-start justify-between gap-5 border-b border-border p-6 sm:p-7">
               <div>
@@ -603,65 +875,83 @@ export default function PartnerDashboard() {
               </Link>
             </div>
 
-            <div className="flex min-h-[310px] items-center justify-center p-7">
-              <div className="max-w-sm text-center">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold/10 text-gold">
-                  <Inbox
-                    className="h-5 w-5"
-                    strokeWidth={1.7}
-                  />
-                </div>
+            {recentReferrals.length >
+            0 ? (
+              <div className="divide-y divide-border">
+                {recentReferrals.map(
+                  (referral) => (
+                    <Link
+                      key={
+                        referral.id
+                      }
+                      to={`/partner/referrals/${referral.id}`}
+                      className="group block p-5 transition hover:bg-background sm:p-6"
+                    >
+                      <div className="flex items-start justify-between gap-5">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-text-primary">
+                              {referral.reference ||
+                                `Referral #${referral.id}`}
+                            </p>
 
-                <h3 className="mt-5 text-lg font-semibold text-text-primary">
-                  No referrals yet
-                </h3>
+                            <span className="border border-gold/30 bg-gold/5 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-gold-deep dark:text-gold">
+                              {formatStatus(
+                                referral.status,
+                              )}
+                            </span>
+                          </div>
 
-                <p className="mt-3 text-sm leading-6 text-text-secondary">
-                  Referrals will appear
-                  here after your
-                  organisation is
-                  verified, accepting
-                  referrals and matched
-                  with eligible citizen
-                  requests.
-                </p>
+                          <p className="mt-2 line-clamp-2 text-sm leading-6 text-text-secondary">
+                            {referral.summary ||
+                              "No referral summary provided."}
+                          </p>
 
-                {profileCompletion <
-                100 ? (
-                  <Link
-                    to="/partner/profile"
-                    className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-gold-deep transition hover:gap-3 dark:text-gold"
-                  >
-                    Complete your
-                    profile
+                          <p className="mt-3 text-xs text-text-secondary">
+                            {referral.district ||
+                              "District not specified"}
+                            {" · "}
+                            {formatDate(
+                              referral.created_at,
+                            )}
+                          </p>
+                        </div>
 
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ) : servicesCompletion <
-                  100 ? (
-                  <Link
-                    to="/partner/services"
-                    className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-gold-deep transition hover:gap-3 dark:text-gold"
-                  >
-                    Complete your
-                    services
-
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                ) : (
-                  <p className="mt-6 text-xs font-semibold text-gold-deep dark:text-gold">
-                    Ready for
-                    verification setup
-                  </p>
+                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-text-secondary transition group-hover:translate-x-1 group-hover:text-gold" />
+                      </div>
+                    </Link>
+                  ),
                 )}
               </div>
-            </div>
+            ) : (
+              <div className="flex min-h-[310px] items-center justify-center p-7">
+                <div className="max-w-sm text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold/10 text-gold">
+                    <Inbox
+                      className="h-5 w-5"
+                      strokeWidth={1.7}
+                    />
+                  </div>
+
+                  <h3 className="mt-5 text-lg font-semibold text-text-primary">
+                    No referrals yet
+                  </h3>
+
+                  <p className="mt-3 text-sm leading-6 text-text-secondary">
+                    New referrals assigned
+                    to this organisation
+                    will appear here.
+                  </p>
+                </div>
+              </div>
+            )}
           </article>
         </section>
 
         {/* ===================================================
-            TRUST / VERIFICATION
+            TRUST
         =================================================== */}
+
         <section className="mt-5 border border-border bg-surface">
           <div className="grid gap-8 p-6 sm:p-7 lg:grid-cols-[0.72fr_1.28fr] lg:items-center">
             <div>
@@ -712,7 +1002,7 @@ export default function PartnerDashboard() {
                     account does not
                     automatically make
                     an organisation
-                    visible to citizens.
+                    verified.
                   </p>
                 </div>
 
@@ -804,7 +1094,8 @@ function SetupStep({
   const statusLabel =
     status === "complete"
       ? "Complete"
-      : status === "in-progress"
+      : status ===
+          "in-progress"
         ? `${completion}% complete`
         : status === "locked"
           ? "Locked"
@@ -814,13 +1105,11 @@ function SetupStep({
     <div
       className={[
         "group grid gap-4 border-t border-border py-5 sm:grid-cols-[auto_1fr_auto] sm:items-start",
-
         to
           ? "cursor-pointer"
           : "",
       ].join(" ")}
     >
-      {/* STEP MARK */}
       <div className="flex items-center gap-3">
         <span className="text-xs font-bold text-gold">
           {number}
@@ -838,7 +1127,8 @@ function SetupStep({
                 : "border-border text-text-secondary",
           ].join(" ")}
         >
-          {status === "complete" ? (
+          {status ===
+          "complete" ? (
             <CheckCircle2 className="h-3.5 w-3.5" />
           ) : status ===
             "in-progress" ? (
@@ -849,7 +1139,6 @@ function SetupStep({
         </span>
       </div>
 
-      {/* TEXT */}
       <div>
         <h3 className="font-semibold text-text-primary">
           {title}
@@ -859,13 +1148,15 @@ function SetupStep({
           {description}
         </p>
 
-        {status === "in-progress" && (
+        {status ===
+          "in-progress" && (
           <div className="mt-3 max-w-xs">
             <div className="h-1 overflow-hidden bg-border">
               <div
                 className="h-full bg-gold transition-all duration-300"
                 style={{
-                  width: `${completion}%`,
+                  width:
+                    `${completion}%`,
                 }}
               />
             </div>
@@ -873,7 +1164,6 @@ function SetupStep({
         )}
       </div>
 
-      {/* STATUS */}
       <div className="flex items-center gap-3 sm:justify-end">
         <span
           className={[

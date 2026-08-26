@@ -20,97 +20,7 @@ class Command(BaseCommand):
         self.stdout.write("Seeding Sauti Yo demo data...")
 
         # -------------------------------------------------
-        # 1. DEMO SITUATION
-        # -------------------------------------------------
-
-        situation, _ = Situation.objects.update_or_create(
-            slug="problem-at-work",
-            defaults={
-                "title": "I have a problem at work",
-                "description": (
-                    "Understand your rights and explore practical "
-                    "next steps for a workplace problem."
-                ),
-                "risk_level": "standard",
-                "is_active": True,
-            },
-        )
-
-        # -------------------------------------------------
-        # 2. RIGHTS TOPIC
-        # -------------------------------------------------
-
-        rights_topic, _ = RightsTopic.objects.update_or_create(
-            slug="workplace-rights",
-            defaults={
-                "title": "Understanding your workplace rights",
-                "summary": (
-                    "Under the Employment Act, 2006, dismissal for "
-                    "misconduct requires your employer to prove the "
-                    "offence and give you a fair hearing first. "
-                    "Termination for other reasons only requires "
-                    "notice or pay in lieu. After 6 months of service, "
-                    "you may be entitled to severance pay."
-                ),
-                "source_name": "Employment Act, 2006 (Act 6 of 2006)",
-                "reviewed_by": "",
-                "verification_status": "review_required",
-                "is_active": True,
-            },
-        )
-
-        SituationRightsTopic.objects.get_or_create(
-            situation=situation,
-            rights_topic=rights_topic,
-        )
-
-        # -------------------------------------------------
-        # 3. RIGHTS-TO-ACTION STEPS
-        # -------------------------------------------------
-
-        steps = [
-            (
-                1,
-                "Write down what happened",
-                "Note the date, what was said or done, and keep any "
-                "written notice or messages from your employer.",
-            ),
-            (
-                2,
-                "Check you were given a fair hearing",
-                "If you were dismissed for misconduct, you have the "
-                "right to know the accusation, defend yourself, and "
-                "appeal - your employer must follow this process.",
-            ),
-            (
-                3,
-                "Check your severance entitlement",
-                "If you've worked at least 6 months and were "
-                "terminated or unfairly dismissed, you may be "
-                "entitled to severance pay.",
-            ),
-            (
-                4,
-                "Get free legal advice",
-                "The Uganda Law Society Legal Aid Project can help "
-                "you understand your options and next steps.",
-            ),
-        ]
-
-        for order, title, description in steps:
-            ActionStep.objects.update_or_create(
-                rights_topic=rights_topic,
-                order=order,
-                defaults={
-                    "title": title,
-                    "description": description,
-                    "is_safety_critical": False,
-                    "is_active": True,
-                },
-            )
-
-        # -------------------------------------------------
-        # 4. CHANNEL CONTENT
+        # CHANNEL CONTENT
         # -------------------------------------------------
         #
         # Multilingual access supports accessibility.
@@ -118,6 +28,11 @@ class Command(BaseCommand):
         #
         # Non-English entries remain explicitly unverified
         # until reviewed by appropriate language speakers.
+        #
+        # The "problem at work" rights content itself (situation,
+        # topic, action steps) is now owned by seed_pilot_content.py,
+        # which has real, cited sources. This command only seeds
+        # generic per-channel preview copy.
         # -------------------------------------------------
 
         channel_content = [
