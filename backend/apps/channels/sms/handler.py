@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.channels.africastalking_client import send_sms
 from apps.channels.models import SmsContext
-from apps.channels.sms import keywords, templates
+from apps.channels.sms import ai_classifier, keywords, templates
 from apps.rights.services import get_situation_detail
 
 FOLLOWUP_WINDOW_MINUTES = 10
@@ -37,6 +37,20 @@ def _send(phone_number, message):
     send_sms(phone_number, message)
 
 
+def _reply_to_situation(phone_number, slug, text):
+    detail = get_situation_detail(slug)
+    if detail is None:
+        _send(phone_number, templates.build_unmatched_reply())
+        return
+    discreet = keywords.match_discreet(text)
+    mode = "discreet" if discreet else "normal"
+    _send(phone_number, templates.build_situation_reply(detail, mode))
+    SmsContext.objects.update_or_create(
+        phone_number=phone_number,
+        defaults={"last_situation_slug": slug, "discreet": discreet},
+    )
+
+
 def handle_sms_request(phone_number, text):
     if _is_rate_limited(phone_number):
         return
@@ -52,19 +66,7 @@ def handle_sms_request(phone_number, text):
 
     slug = keywords.match_situation(text)
     if slug:
-        detail = get_situation_detail(slug)
-        if detail is None:
-            _send(phone_number, templates.build_unmatched_reply())
-            return
-        mode = "discreet" if keywords.match_discreet(text) else "normal"
-        _send(phone_number, templates.build_situation_reply(detail, mode))
-        SmsContext.objects.update_or_create(
-            phone_number=phone_number,
-            defaults={
-                "last_situation_slug": slug,
-                "discreet": keywords.match_discreet(text),
-            },
-        )
+        _reply_to_situation(phone_number, slug, text)
         return
 
     followup = keywords.match_followup(text)
@@ -82,6 +84,11 @@ def handle_sms_request(phone_number, text):
             _send(phone_number, templates.build_support_reply(detail, mode))
         else:
             _send(phone_number, templates.build_steps_reply(detail, mode))
+        return
+
+    slug = ai_classifier.classify_situation(text)
+    if slug:
+        _reply_to_situation(phone_number, slug, text)
         return
 
     _send(phone_number, templates.build_unmatched_reply())

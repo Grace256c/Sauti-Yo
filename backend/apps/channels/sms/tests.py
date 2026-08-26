@@ -527,6 +527,44 @@ class SmsCallbackViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
 
 
+class AiFallbackTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+        cache.clear()
+
+    @patch("apps.channels.sms.handler.ai_classifier.classify_situation")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_ai_classified_slug_sends_situation_reply(
+        self, mock_send, mock_classify
+    ):
+        mock_classify.return_value = "home-safety"
+        handle_sms_request(
+            "+256700000000", "I'm scared of my spouse and don't know what to do"
+        )
+        message = mock_send.call_args[0][1]
+        self.assertIn("Sauti 116 - Child & GBV Helpline", message)
+
+    @patch("apps.channels.sms.handler.ai_classifier.classify_situation")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_ai_classified_slug_persists_sms_context(
+        self, mock_send, mock_classify
+    ):
+        mock_classify.return_value = "home-safety"
+        handle_sms_request(
+            "+256700000000", "I'm scared of my spouse and don't know what to do"
+        )
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.last_situation_slug, "home-safety")
+
+    @patch("apps.channels.sms.handler.ai_classifier.classify_situation")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_ai_no_match_sends_unmatched_reply(self, mock_send, mock_classify):
+        mock_classify.return_value = None
+        handle_sms_request("+256700000000", "what time is it")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.build_unmatched_reply())
+
+
 def _mock_text_response(text):
     block = MagicMock()
     block.type = "text"
