@@ -43,6 +43,10 @@ AFRICASTALKING_USERNAME = os.getenv("AFRICASTALKING_USERNAME") or "sandbox"
 AFRICASTALKING_API_KEY = os.getenv("AFRICASTALKING_API_KEY", "")
 AFRICASTALKING_SMS_SENDER_ID = os.getenv("AFRICASTALKING_SMS_SENDER_ID", "")
 
+# LLM
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL") or "claude-haiku-4-5"
+
 # Application definition
 
 INSTALLED_APPS = [

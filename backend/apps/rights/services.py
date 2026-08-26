@@ -19,7 +19,7 @@ def list_active_situations():
     return list(
         Situation.objects.filter(is_active=True)
         .order_by("title")
-        .values("slug", "title", "risk_level")
+        .values("slug", "title", "description", "risk_level")
     )
 
 
