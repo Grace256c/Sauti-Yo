@@ -977,10 +977,65 @@ export default function RightsResults() {
 
   const rightsCategory = getRightsCategory(category);
 
-  const backendSituationSlug =
-    rightsCategory?.slug === "work-employment"
-      ? "problem-at-work"
+  const backendAnswers =
+    rightsCategory
+      ? getStoredAnswers(
+          rightsCategory.slug,
+        )
+      : {};
+
+  const backendPrimaryIssue =
+    rightsCategory
+      ? getPrimaryIssue(
+          rightsCategory.slug,
+          backendAnswers,
+        )
       : null;
+
+  const backendSituationSlug = (() => {
+    if (!rightsCategory) {
+      return null;
+    }
+
+    if (
+      rightsCategory.slug ===
+      "work-employment"
+    ) {
+      return "problem-at-work";
+    }
+
+    if (
+      rightsCategory.slug ===
+        "land-housing" &&
+      backendPrimaryIssue ===
+        "eviction"
+    ) {
+      return "facing-eviction";
+    }
+
+    if (
+      rightsCategory.slug ===
+      "safety-protection"
+    ) {
+      if (
+        backendPrimaryIssue ===
+        "harassment"
+      ) {
+        return "sexual-harassment";
+      }
+
+      if (
+        backendPrimaryIssue ===
+          "violence" ||
+        backendPrimaryIssue ===
+          "abuse"
+      ) {
+        return "domestic-violence";
+      }
+    }
+
+    return null;
+  })();
 
   useEffect(() => {
     if (!backendSituationSlug) {
