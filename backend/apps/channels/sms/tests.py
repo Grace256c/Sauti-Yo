@@ -761,6 +761,22 @@ class RewordReplyTests(TestCase):
         result = ai_classifier.reword_reply("You're not alone in this.")
         self.assertEqual(result, "I'm here for you.")
 
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_when_phone_number_corrupted(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("Please call 1167 for help.")
+        )
+        result = ai_classifier.reword_reply("Sauti 116: Call 116 for help.")
+        self.assertIsNone(result)
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_when_phone_number_invented(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("You're not alone. Call 0800111222 now.")
+        )
+        result = ai_classifier.reword_reply("You're not alone in this.")
+        self.assertIsNone(result)
+
 
 @override_settings(LLM_API_KEY="")
 class SafetyCheckinTests(TestCase):

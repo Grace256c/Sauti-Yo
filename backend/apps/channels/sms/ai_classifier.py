@@ -98,7 +98,8 @@ def reword_reply(template_text):
     or None if rewording isn't possible/safe - the caller should send
     the original `template_text` unchanged in that case. Every failure
     mode (missing key, empty input, API error, or the reworded text
-    dropping a phone number that was in the original) returns None.
+    dropping, corrupting, or inventing a phone number relative to the
+    original) returns None.
     """
     if not settings.LLM_API_KEY or not template_text.strip():
         return None
@@ -123,10 +124,7 @@ def reword_reply(template_text):
 
     if not reworded:
         return None
-    for number in phone_numbers:
-        if number not in reworded:
-            logger.warning(
-                "Reworded reply dropped a phone number, discarding"
-            )
-            return None
+    if set(re.findall(r"\d{3,}", reworded)) != set(phone_numbers):
+        logger.warning("Reworded reply altered a phone number, discarding")
+        return None
     return reworded
