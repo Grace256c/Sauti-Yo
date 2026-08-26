@@ -697,3 +697,62 @@ class HandleUssdRequestTests(TestCase):
         self.assertIn("1. English", response)
         session = UssdSession.objects.get(session_id="unknown-session")
         self.assertEqual(session.state, "language_select")
+
+    def test_non_consecutive_invalid_attempts_do_not_end_session(self):
+        """
+        Regression test for Task 8 finding: verify that valid transitions
+        strip the "attempts" counter from context, so that non-consecutive
+        invalid attempts do not accumulate.
+
+        Scenario:
+        1. One invalid attempt in situation_detail (attempts=1)
+        2. Valid chunk-advance navigation (this spreads context including attempts)
+        3. Fix should strip attempts; without fix, it would persist
+        4. Another invalid attempt should reset to 1, not increment to 2
+        """
+        # Update situation to have a long description (multiple chunks)
+        self.situation.description = "Long description. " * 20
+        self.situation.save()
+
+        # Create a second topic so we navigate through situation_detail
+        # (not auto-skip to topic_detail)
+        long_topic = RightsTopic.objects.create(
+            slug="topic-long", title="Topic Long", summary="Long summary. " * 20
+        )
+        SituationRightsTopic.objects.create(
+            situation=self.situation, rights_topic=long_topic
+        )
+
+        # Navigate: language -> main menu -> situation_list -> situation_detail
+        handle_ussd_request("sess-attempts", "+256700000000", "")
+        handle_ussd_request("sess-attempts", "+256700000000", "1")  # English
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1")  # Find my rights
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1")  # Select first situation
+
+        # Now in situation_detail at chunk_index=0
+        session = UssdSession.objects.get(session_id="sess-attempts")
+        self.assertEqual(session.state, "situation_detail")
+        self.assertEqual(session.context.get("chunk_index"), 0)
+
+        # Invalid attempt in situation_detail (only "1" for More is valid)
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9")
+        session.refresh_from_db()
+        self.assertEqual(session.context.get("attempts"), 1)
+        self.assertEqual(session.state, "situation_detail")
+        self.assertEqual(session.context.get("chunk_index"), 0)
+
+        # Valid navigation: "1" for More (this spreads context including attempts)
+        # The fix should strip the attempts key from next_context before persisting
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9*1")
+        session.refresh_from_db()
+        self.assertNotIn("attempts", session.context)
+        self.assertEqual(session.state, "situation_detail")
+        self.assertEqual(session.context.get("chunk_index"), 1)
+        self.assertTrue(session.is_active)
+
+        # Another invalid attempt should count as 1, not 2
+        # (because attempts was stripped from context on the previous valid transition)
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9*1*9")
+        session.refresh_from_db()
+        self.assertEqual(session.context.get("attempts"), 1)
+        self.assertTrue(session.is_active)

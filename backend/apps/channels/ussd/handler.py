@@ -29,6 +29,9 @@ def handle_ussd_request(session_id, phone_number, text):
         return _format_response(f"{invalid_prefix}\n{response_text}", ended)
 
     next_state, next_context = result
+    next_context = {
+        key: value for key, value in next_context.items() if key != "attempts"
+    }
     session.state = next_state
     session.context = next_context
     response_text, ended = menus.render_state(next_state, session)
