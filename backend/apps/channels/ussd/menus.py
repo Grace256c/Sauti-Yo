@@ -586,3 +586,37 @@ def transition_emergency_list(session, user_input):
     if user_input == "0":
         return "main_menu", {}
     return None
+
+
+RENDER_HANDLERS = {
+    "language_select": render_language_select,
+    "main_menu": render_main_menu,
+    "goodbye": render_goodbye,
+    "situation_list": render_situation_list,
+    "situation_detail": render_situation_detail,
+    "safety_gate": render_safety_gate,
+    "topic_detail": render_topic_detail,
+    "action_steps": render_action_steps,
+    "support_contacts": render_support_contacts,
+    "emergency_list": render_emergency_list,
+}
+
+TRANSITION_HANDLERS = {
+    "language_select": transition_language_select,
+    "main_menu": transition_main_menu,
+    "situation_list": transition_situation_list,
+    "situation_detail": transition_situation_detail,
+    "safety_gate": transition_safety_gate,
+    "topic_detail": transition_topic_detail,
+    "action_steps": transition_action_steps,
+    "support_contacts": transition_support_contacts,
+    "emergency_list": transition_emergency_list,
+}
+
+
+def render_state(state, session):
+    return RENDER_HANDLERS[state](session)
+
+
+def transition_state(state, session, user_input):
+    return TRANSITION_HANDLERS[state](session, user_input)

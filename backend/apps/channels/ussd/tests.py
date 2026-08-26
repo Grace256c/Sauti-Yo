@@ -3,6 +3,7 @@ from django.test import TestCase
 
 from apps.channels.models import UssdSession
 from apps.channels.ussd import sessions
+from apps.channels.ussd.handler import handle_ussd_request
 
 
 class UssdSessionModelTests(TestCase):
@@ -631,3 +632,68 @@ class EmergencyListTests(TestCase):
     def test_render_last_chunk_does_not_end_session(self):
         text, ended = menus.render_emergency_list(self._session(9999))
         self.assertFalse(ended)
+
+
+class HandleUssdRequestTests(TestCase):
+    def setUp(self):
+        self.situation = Situation.objects.create(slug="eviction", title="Eviction")
+        self.topic = RightsTopic.objects.create(
+            slug="topic-a", title="Topic A", summary="Short summary"
+        )
+        SituationRightsTopic.objects.create(
+            situation=self.situation, rights_topic=self.topic
+        )
+
+    def test_new_session_shows_language_picker(self):
+        response = handle_ussd_request("sess-1", "+256700000000", "")
+        self.assertTrue(response.startswith("CON "))
+        self.assertIn("1. English", response)
+
+        session = UssdSession.objects.get(session_id="sess-1")
+        self.assertEqual(session.state, "language_select")
+        self.assertTrue(session.is_active)
+
+    def test_full_flow_reaches_topic_detail(self):
+        handle_ussd_request("sess-2", "+256700000000", "")
+        handle_ussd_request("sess-2", "+256700000000", "1")
+        handle_ussd_request("sess-2", "+256700000000", "1*1")
+        response = handle_ussd_request("sess-2", "+256700000000", "1*1*1")
+
+        self.assertIn("Short summary", response)
+        session = UssdSession.objects.get(session_id="sess-2")
+        self.assertEqual(session.state, "topic_detail")
+        self.assertEqual(session.language, "en")
+
+    def test_exit_ends_session(self):
+        handle_ussd_request("sess-3", "+256700000000", "")
+        handle_ussd_request("sess-3", "+256700000000", "1")
+        response = handle_ussd_request("sess-3", "+256700000000", "1*0")
+
+        self.assertTrue(response.startswith("END "))
+        session = UssdSession.objects.get(session_id="sess-3")
+        self.assertFalse(session.is_active)
+
+    def test_invalid_input_redisplays_screen_with_prefix(self):
+        handle_ussd_request("sess-4", "+256700000000", "")
+        response = handle_ussd_request("sess-4", "+256700000000", "9")
+        self.assertTrue(response.startswith("CON Invalid choice."))
+
+        session = UssdSession.objects.get(session_id="sess-4")
+        self.assertEqual(session.context.get("attempts"), 1)
+
+    def test_three_invalid_attempts_ends_session(self):
+        handle_ussd_request("sess-5", "+256700000000", "")
+        handle_ussd_request("sess-5", "+256700000000", "9")
+        handle_ussd_request("sess-5", "+256700000000", "9*9")
+        response = handle_ussd_request("sess-5", "+256700000000", "9*9*9")
+
+        self.assertTrue(response.startswith("END "))
+        self.assertIn("Too many invalid attempts", response)
+        session = UssdSession.objects.get(session_id="sess-5")
+        self.assertFalse(session.is_active)
+
+    def test_stale_session_id_restarts_at_language_picker(self):
+        response = handle_ussd_request("unknown-session", "+256700000000", "1*1*1")
+        self.assertIn("1. English", response)
+        session = UssdSession.objects.get(session_id="unknown-session")
+        self.assertEqual(session.state, "language_select")
