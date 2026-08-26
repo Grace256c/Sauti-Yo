@@ -628,6 +628,7 @@ class SafetyGateTests(TestCase):
             title="High Risk Topic",
             summary="Summary",
             risk_level="high_risk",
+            verification_status="verified",
         )
         self.safety = SafetyResponse.objects.create(
             rights_topic=self.topic,
@@ -984,3 +985,169 @@ class UssdCallbackViewTests(TestCase):
     def test_get_not_allowed(self):
         response = self.client.get(reverse("ussd-callback"))
         self.assertEqual(response.status_code, 405)
+
+
+class UnreviewedNoticeTests(TestCase):
+    def test_prepend_notice_leaves_verified_text_unchanged(self):
+        text = menus._prepend_unreviewed_notice("Some text.", "verified", "en")
+        self.assertEqual(text, "Some text.")
+
+    def test_prepend_notice_adds_notice_for_review_required(self):
+        text = menus._prepend_unreviewed_notice(
+            "Some text.", "review_required", "en"
+        )
+        self.assertTrue(text.startswith("Note: not yet reviewed.\n\n"))
+        self.assertIn("Some text.", text)
+
+    def test_prepend_notice_adds_notice_for_expired_and_archived(self):
+        for status in ("expired", "archived"):
+            text = menus._prepend_unreviewed_notice("Some text.", status, "en")
+            self.assertTrue(text.startswith("Note: not yet reviewed.\n\n"))
+
+    def test_prepend_notice_on_empty_text_returns_just_the_notice(self):
+        text = menus._prepend_unreviewed_notice("", "review_required", "en")
+        self.assertEqual(text, "Note: not yet reviewed.")
+
+    def test_render_topic_detail_shows_notice_for_review_required_topic(self):
+        RightsTopic.objects.create(
+            slug="unreviewed-topic",
+            title="Unreviewed Topic",
+            summary="Short summary.",
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "unreviewed-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_topic_detail(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Short summary.", text)
+        self.assertFalse(ended)
+
+    def test_render_topic_detail_shows_no_notice_for_verified_topic(self):
+        RightsTopic.objects.create(
+            slug="verified-topic",
+            title="Verified Topic",
+            summary="Short summary.",
+            verification_status="verified",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "verified-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_topic_detail(session)
+        self.assertNotIn("Note: not yet reviewed.", text)
+        self.assertIn("Short summary.", text)
+
+    def test_transition_topic_detail_still_advances_chunks_for_review_required_topic(self):
+        RightsTopic.objects.create(
+            slug="long-unreviewed-topic",
+            title="Long Unreviewed Topic",
+            summary="Long summary sentence here. " * 20,
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "long-unreviewed-topic",
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_topic_detail(session, "1")
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 1)
+
+    def test_render_safety_gate_shows_notice_for_review_required_topic(self):
+        RightsTopic.objects.create(
+            slug="unreviewed-safety-topic",
+            title="Unreviewed Safety Topic",
+            summary="Fallback summary.",
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "unreviewed-safety-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_safety_gate(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertFalse(ended)
+
+    def test_render_safety_gate_long_message_puts_notice_in_its_own_first_chunk(self):
+        topic = RightsTopic.objects.create(
+            slug="long-unreviewed-safety-topic",
+            title="Long Unreviewed Safety Topic",
+            summary="Fallback summary.",
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        SafetyResponse.objects.create(
+            rights_topic=topic,
+            trigger_key="default",
+            message="Call the emergency line immediately. " * 10,
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "long-unreviewed-safety-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_safety_gate(session)
+        # With a long safety message, the notice doesn't fit on the same
+        # screen as the start of the message - each paragraph is wrapped
+        # independently near the full budget, so the notice takes its own
+        # first chunk and the real message starts on chunk 1. This is
+        # expected, verified behavior (see Global Constraints).
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertNotIn("Call the emergency line", text)
+        self.assertLessEqual(len(text), 182)
+
+        session.context["chunk_index"] = 1
+        text_chunk_1, _ = menus.render_safety_gate(session)
+        self.assertIn("Call the emergency line", text_chunk_1)
+
+    def test_transition_safety_gate_stays_in_sync_with_render_for_review_required_topic(self):
+        topic = RightsTopic.objects.create(
+            slug="sync-check-topic",
+            title="Sync Check Topic",
+            summary="Fallback summary.",
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        SafetyResponse.objects.create(
+            rights_topic=topic,
+            trigger_key="default",
+            message="Call the emergency line immediately. " * 10,
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "sync-check-topic",
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_safety_gate(session, "1")
+        self.assertEqual(next_state, "safety_gate")
+        self.assertEqual(context["chunk_index"], 1)
