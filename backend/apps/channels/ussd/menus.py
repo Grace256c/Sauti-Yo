@@ -23,6 +23,7 @@ DEFAULT_COPY = {
     "ussd.related_rights": "Related rights:",
     "ussd.topic_menu": "1. Action steps\n2. Support contacts\n0. Back",
     "ussd.safety_continue": "1. Continue\n0. Back",
+    "ussd.continue": "1. Continue\n0. Back",
     "ussd.no_action_steps": (
         "No action steps are available for this topic."
     ),
@@ -55,9 +56,19 @@ def truncate(text, limit):
 
 
 def _wrap_words(words, budget):
+    # A non-positive budget would make the hard-split loop below spin forever.
+    # No current caller can produce one (every budget is floored at 20), but a
+    # hang inside a request handler is far worse than a degenerate wrap.
+    budget = max(budget, 1)
     lines = []
     current = ""
     for word in words:
+        while len(word) > budget:
+            if current:
+                lines.append(current)
+                current = ""
+            lines.append(word[:budget])
+            word = word[budget:]
         candidate = f"{current} {word}".strip()
         if len(candidate) > budget:
             if current:
@@ -252,20 +263,6 @@ def transition_situation_list(session, user_input):
     return None
 
 
-def _situation_detail_trailing(topics, language):
-    back = get_copy("ussd.back", language)
-    if not topics:
-        return f"0. {back}", []
-    header = get_copy("ussd.related_rights", language)
-    more_label = get_copy("ussd.more", language)
-    reserved = len(header) + 1 + len(f"0. {back}") + 2
-    budget = max(SCREEN_BUDGET - reserved, 20)
-    lines, shown, _next_index, _has_more = _fit_numbered_lines(
-        topics, 0, lambda t: truncate(t.title, TITLE_TRUNCATE_LENGTH), budget, max_items=9
-    )
-    return "\n".join([header] + lines + [f"0. {back}"]), shown
-
-
 def render_situation_detail(session):
     situation = Situation.objects.filter(
         slug=session.context.get("situation_slug"), is_active=True
@@ -273,10 +270,14 @@ def render_situation_detail(session):
     if situation is None:
         return get_copy("ussd.not_found", session.language), False
 
-    topics = list(_topics_for_situation(situation)[:9])
-    chunk_index = session.context.get("chunk_index", 0)
-    trailing, _shown_topics = _situation_detail_trailing(topics, session.language)
+    if session.context.get("stage") == "topics":
+        return _render_situation_topics(session, situation)
 
+    topics = list(_topics_for_situation(situation)[:9])
+    back = get_copy("ussd.back", session.language)
+    trailing = get_copy("ussd.continue", session.language) if topics else f"0. {back}"
+
+    chunk_index = session.context.get("chunk_index", 0)
     text = situation.description or situation.title
     screen, _ = _chunked_screen(text, chunk_index, trailing, session.language)
     return screen, False
@@ -289,10 +290,15 @@ def transition_situation_detail(session, user_input):
     if situation is None:
         return "situation_list", {"page": 0}
 
+    if session.context.get("stage") == "topics":
+        return _transition_situation_topics(session, user_input, situation)
+
     topics = list(_topics_for_situation(situation)[:9])
+    back = get_copy("ussd.back", session.language)
+    trailing = get_copy("ussd.continue", session.language) if topics else f"0. {back}"
+
     chunk_index = session.context.get("chunk_index", 0)
     text = situation.description or situation.title
-    trailing, shown_topics = _situation_detail_trailing(topics, session.language)
     _, is_last = _chunked_screen(text, chunk_index, trailing, session.language)
 
     if not is_last:
@@ -307,10 +313,70 @@ def transition_situation_detail(session, user_input):
 
     if user_input == "0":
         return "situation_list", {"page": 0}
-    if shown_topics and user_input.isdigit():
+    if topics and user_input == "1":
+        return (
+            "situation_detail",
+            {
+                "situation_slug": situation.slug,
+                "stage": "topics",
+                "page": 0,
+            },
+        )
+    return None
+
+
+def _situation_topics_page(session, topics):
+    start_index = session.context.get("page", 0)
+    back = get_copy("ussd.back", session.language)
+    header = get_copy("ussd.related_rights", session.language)
+    more_label = get_copy("ussd.more", session.language)
+
+    reserved = len(header) + 1 + len(f"8. {more_label}") + 1 + len(f"0. {back}") + 2
+    budget = max(SCREEN_BUDGET - reserved, 20)
+
+    lines, shown, next_index, has_more = _fit_numbered_lines(
+        topics,
+        start_index,
+        lambda t: truncate(t.title, TITLE_TRUNCATE_LENGTH),
+        budget,
+        max_items=7,
+    )
+    return header, lines, shown, next_index, has_more, back, more_label
+
+
+def _render_situation_topics(session, situation):
+    topics = list(_topics_for_situation(situation)[:9])
+    header, lines, shown, next_index, has_more, back, more_label = (
+        _situation_topics_page(session, topics)
+    )
+    screen_lines = [header] + lines
+    if has_more:
+        screen_lines.append(f"8. {more_label}")
+    screen_lines.append(f"0. {back}")
+    return "\n".join(screen_lines), False
+
+
+def _transition_situation_topics(session, user_input, situation):
+    topics = list(_topics_for_situation(situation)[:9])
+    header, lines, shown, next_index, has_more, back, more_label = (
+        _situation_topics_page(session, topics)
+    )
+
+    if user_input == "0":
+        return "situation_list", {"page": 0}
+    if user_input == "8" and has_more:
+        return (
+            "situation_detail",
+            {
+                "situation_slug": situation.slug,
+                "stage": "topics",
+                "page": next_index,
+            },
+        )
+    if user_input.isdigit():
         choice = int(user_input)
-        if 1 <= choice <= len(shown_topics):
-            return _enter_topic(situation.slug, shown_topics[choice - 1])
+        if 1 <= choice <= len(shown):
+            return _enter_topic(situation.slug, shown[choice - 1])
     return None
 
 
@@ -333,7 +399,7 @@ def _back_from_topic(situation_slug, topic_slug):
         return "situation_list", {"page": 0}
     return (
         "situation_detail",
-        {"situation_slug": situation_slug, "chunk_index": 9999},
+        {"situation_slug": situation_slug, "stage": "topics", "page": 0},
     )
 
 

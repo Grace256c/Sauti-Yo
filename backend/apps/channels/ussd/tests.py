@@ -101,6 +101,12 @@ class TextHelperTests(TestCase):
         for original_line in text.split("\n"):
             self.assertIn(original_line, joined.split("\n"))
 
+    def test_chunk_text_hard_splits_a_single_token_longer_than_budget(self):
+        long_token = "a" * 50
+        chunks = menus.chunk_text(long_token, budget=20)
+        self.assertTrue(all(len(chunk) <= 20 for chunk in chunks))
+        self.assertEqual("".join(chunks), long_token)
+
     def test_paginate_items_returns_page_and_has_more_flag(self):
         items = list(range(12))
         page_items, has_more = menus.paginate_items(items, page=0, page_size=5)
@@ -328,15 +334,26 @@ class SituationDetailTests(TestCase):
         self.assertIn("1. More", text)
         self.assertFalse(ended)
 
-    def test_render_last_chunk_lists_topics(self):
+    def test_render_last_chunk_offers_continue_to_topics(self):
         session = UssdSession(
             state="situation_detail",
             language="en",
             context={"situation_slug": "eviction", "chunk_index": 9999},
         )
         text, ended = menus.render_situation_detail(session)
+        self.assertIn("1. Continue", text)
+        self.assertFalse(ended)
+
+    def test_render_topics_stage_lists_topics(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "stage": "topics", "page": 0},
+        )
+        text, ended = menus.render_situation_detail(session)
         self.assertIn("1. Topic A", text)
         self.assertIn("2. Topic B", text)
+        self.assertFalse(ended)
 
     def test_render_last_chunk_does_not_end_session(self):
         session = UssdSession(
@@ -357,11 +374,22 @@ class SituationDetailTests(TestCase):
         self.assertEqual(next_state, "situation_detail")
         self.assertEqual(context["chunk_index"], 1)
 
-    def test_transition_selects_topic_on_last_chunk(self):
+    def test_transition_continue_on_last_chunk_enters_topics_stage(self):
         session = UssdSession(
             state="situation_detail",
             language="en",
             context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        next_state, context = menus.transition_situation_detail(session, "1")
+        self.assertEqual(next_state, "situation_detail")
+        self.assertEqual(context["stage"], "topics")
+        self.assertEqual(context["page"], 0)
+
+    def test_transition_selects_topic_in_topics_stage(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "stage": "topics", "page": 0},
         )
         next_state, context = menus.transition_situation_detail(session, "1")
         self.assertEqual(next_state, "topic_detail")
@@ -377,7 +405,7 @@ class SituationDetailTests(TestCase):
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
 
-    def test_render_last_chunk_never_exceeds_screen_cap_with_many_topics(self):
+    def test_render_topics_stage_never_exceeds_screen_cap_with_many_topics(self):
         for i in range(7):
             topic = RightsTopic.objects.create(
                 slug=f"budget-topic-{i}",
@@ -390,7 +418,7 @@ class SituationDetailTests(TestCase):
         session = UssdSession(
             state="situation_detail",
             language="en",
-            context={"situation_slug": "eviction", "chunk_index": 9999},
+            context={"situation_slug": "eviction", "stage": "topics", "page": 0},
         )
         text, ended = menus.render_situation_detail(session)
         self.assertLessEqual(len(text), 182)
@@ -412,10 +440,129 @@ class SituationDetailTests(TestCase):
             language="en",
             context={"situation_slug": "eviction", "chunk_index": 9999},
         )
+        _, context = menus.transition_situation_detail(session, "1")
+        session.context = context
         next_state, context = menus.transition_situation_detail(session, "1")
 
         self.assertEqual(next_state, "safety_gate")
         self.assertEqual(context["topic_slug"], "topic-a")
+
+    def test_many_topics_are_reachable_via_more_not_silently_dropped(self):
+        for i in range(7):
+            topic = RightsTopic.objects.create(
+                slug=f"reachable-topic-{i}",
+                title=f"A reasonably long rights topic title number {i}",
+                summary="Summary",
+            )
+            SituationRightsTopic.objects.create(
+                situation=self.situation, rights_topic=topic
+            )
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "stage": "topics", "page": 0},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertIn("8.", text)
+        self.assertLessEqual(len(text), 182)
+
+        next_state, context = menus.transition_situation_detail(session, "8")
+        self.assertEqual(next_state, "situation_detail")
+        self.assertEqual(context["stage"], "topics")
+        self.assertGreater(context["page"], 0)
+
+        session2 = UssdSession(
+            state="situation_detail", language="en", context=context
+        )
+        text2, _ = menus.render_situation_detail(session2)
+        self.assertLessEqual(len(text2), 182)
+
+    def test_description_with_many_linked_topics_does_not_fragment(self):
+        for i in range(3):
+            topic = RightsTopic.objects.create(
+                slug=f"frag-topic-{i}",
+                title=f"A reasonably long rights topic title number {i}",
+                summary="Summary",
+            )
+            SituationRightsTopic.objects.create(
+                situation=self.situation, rights_topic=topic
+            )
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 0},
+        )
+        text, ended = menus.render_situation_detail(session)
+        # The description body chunk (everything before the blank-line separator
+        # and the short "1. Continue\n0. Back" trailing) should be a substantial
+        # fraction of the screen budget, not a ~16-character fragment.
+        body = text.split("\n\n")[0]
+        self.assertGreater(len(body), 100)
+
+    def test_long_unbreakable_token_never_exceeds_screen_cap(self):
+        self.situation.description = (
+            "See this resource: "
+            "https://example.org/a/very/long/url/that/does/not/contain/any/spaces/at/all/whatsoever/for/testing"
+        )
+        self.situation.save()
+        for i in range(3):
+            topic = RightsTopic.objects.create(
+                slug=f"url-topic-{i}",
+                title=f"A reasonably long rights topic title number {i}",
+                summary="Summary",
+            )
+            SituationRightsTopic.objects.create(
+                situation=self.situation, rights_topic=topic
+            )
+        for chunk_index in range(6):
+            session = UssdSession(
+                state="situation_detail",
+                language="en",
+                context={"situation_slug": "eviction", "chunk_index": chunk_index},
+            )
+            text, ended = menus.render_situation_detail(session)
+            self.assertLessEqual(
+                len(text), 182, f"chunk_index={chunk_index} produced {len(text)} chars"
+            )
+
+    def test_token_longer_than_body_budget_is_split_and_stays_within_cap(self):
+        """
+        The description body budget for situation_detail is 139 chars, so the
+        98-char URL above never exercises the hard-split path. Use a token that
+        genuinely exceeds the budget: without _wrap_words' hard split this
+        renders a single ~321-char screen and loses the "0. Back" option.
+        """
+        self.situation.description = "See this resource: https://example.org/" + (
+            "z" * 280
+        )
+        self.situation.save()
+
+        seen_chunks = 0
+        for chunk_index in range(12):
+            session = UssdSession(
+                state="situation_detail",
+                language="en",
+                context={"situation_slug": "eviction", "chunk_index": chunk_index},
+            )
+            text, _ = menus.render_situation_detail(session)
+            self.assertLessEqual(
+                len(text), 182, f"chunk_index={chunk_index} produced {len(text)} chars"
+            )
+            self.assertIn("0. Back", text)
+            seen_chunks += 1
+        self.assertGreater(seen_chunks, 0)
+
+    def test_back_from_topic_with_multiple_topics_returns_to_topics_stage(self):
+        next_state, context = menus._back_from_topic("eviction", "topic-a")
+        self.assertEqual(next_state, "situation_detail")
+        self.assertEqual(context["stage"], "topics")
+        self.assertEqual(context["page"], 0)
+
+    def test_back_from_topic_with_single_topic_returns_to_situation_list(self):
+        SituationRightsTopic.objects.filter(rights_topic=self.topic_b).delete()
+        next_state, context = menus._back_from_topic("eviction", "topic-a")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
 
 
 from apps.rights.models import ActionStep, SafetyResponse
