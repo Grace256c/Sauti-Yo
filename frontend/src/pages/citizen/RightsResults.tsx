@@ -1,4 +1,8 @@
 import {
+  useEffect,
+  useState,
+} from "react";
+import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
@@ -24,6 +28,14 @@ import {
 import type {
   CategorySlug,
 } from "../../data/rightsData";
+
+import {
+  getSituation,
+} from "../../services/rights";
+
+import type {
+  Situation,
+} from "../../services/rights";
 
 type JourneyAnswers = Record<string, string>;
 
@@ -953,7 +965,122 @@ function ResultList({
 export default function RightsResults() {
   const { category } = useParams();
 
+  const [
+    backendSituation,
+    setBackendSituation,
+  ] = useState<Situation | null>(null);
+
+  const [
+    backendLoading,
+    setBackendLoading,
+  ] = useState(false);
+
   const rightsCategory = getRightsCategory(category);
+
+  const backendAnswers =
+    rightsCategory
+      ? getStoredAnswers(
+          rightsCategory.slug,
+        )
+      : {};
+
+  const backendPrimaryIssue =
+    rightsCategory
+      ? getPrimaryIssue(
+          rightsCategory.slug,
+          backendAnswers,
+        )
+      : null;
+
+  const backendSituationSlug = (() => {
+    if (!rightsCategory) {
+      return null;
+    }
+
+    if (
+      rightsCategory.slug ===
+      "work-employment"
+    ) {
+      return "problem-at-work";
+    }
+
+    if (
+      rightsCategory.slug ===
+        "land-housing" &&
+      backendPrimaryIssue ===
+        "eviction"
+    ) {
+      return "facing-eviction";
+    }
+
+    if (
+      rightsCategory.slug ===
+      "safety-protection"
+    ) {
+      if (
+        backendPrimaryIssue ===
+        "harassment"
+      ) {
+        return "sexual-harassment";
+      }
+
+      if (
+        backendPrimaryIssue ===
+          "violence" ||
+        backendPrimaryIssue ===
+          "abuse"
+      ) {
+        return "domestic-violence";
+      }
+    }
+
+    return null;
+  })();
+
+  useEffect(() => {
+    if (!backendSituationSlug) {
+      setBackendSituation(null);
+      return;
+    }
+
+    const activeSituationSlug =
+      backendSituationSlug;
+
+    let active = true;
+
+    async function loadBackendRights() {
+      setBackendLoading(true);
+
+      try {
+        const situation =
+          await getSituation(
+            activeSituationSlug,
+          );
+
+        if (active) {
+          setBackendSituation(
+            situation,
+          );
+        }
+      } catch {
+        if (active) {
+          setBackendSituation(
+            null,
+          );
+        }
+      } finally {
+        if (active) {
+          setBackendLoading(false);
+        }
+      }
+    }
+
+    void loadBackendRights();
+
+    return () => {
+      active = false;
+    };
+  }, [backendSituationSlug]);
 
   if (!rightsCategory) {
     return <Navigate to="/rights" replace />;
@@ -986,6 +1113,29 @@ export default function RightsResults() {
     issueResults[rightsCategory.slug][
       primaryIssue
     ];
+
+  const backendTopic =
+    backendSituation
+      ?.rights_links?.[0]
+      ?.rights_topic ?? null;
+
+  const backendActions =
+    backendTopic?.action_steps
+      ?.filter(
+        (step) => step.is_active,
+      )
+      .map(
+        (step) =>
+          step.description ||
+          step.title,
+      ) ?? [];
+
+  const backendSafetyResponses =
+    backendTopic?.safety_responses
+      ?.filter(
+        (response) =>
+          response.is_active,
+      ) ?? [];
 
   const Icon = rightsCategory.icon;
 
@@ -1028,6 +1178,50 @@ export default function RightsResults() {
                 </p>
               </div>
             </div>
+          </div>
+        </section>
+      )}
+
+      {backendTopic && (
+        <section className="border-b border-border bg-surface">
+          <div className="site-container py-4">
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <span className="font-bold uppercase tracking-[0.14em] text-gold-deep dark:text-gold">
+                Backend rights content status
+              </span>
+
+              <span className="text-text-secondary">
+                {backendTopic.title}
+              </span>
+
+              <span className="border border-border px-2 py-1 font-semibold text-text-secondary">
+                {backendTopic.verification_status ===
+                "verified"
+                  ? "Verified"
+                  : "Review required"}
+              </span>
+            </div>
+
+            {backendLoading && (
+              <p className="mt-2 text-xs text-text-secondary">
+                Loading reviewed rights information...
+              </p>
+            )}
+
+            {backendSafetyResponses.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {backendSafetyResponses.map(
+                  (response) => (
+                    <p
+                      key={response.id}
+                      className="text-sm leading-6 text-text-secondary"
+                    >
+                      {response.message}
+                    </p>
+                  ),
+                )}
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1193,7 +1387,7 @@ export default function RightsResults() {
               </p>
             </div>
 
-            <ResultList items={result.actions} />
+            <ResultList items={backendActions.length > 0 ? backendActions : result.actions} />
           </div>
         </div>
       </section>

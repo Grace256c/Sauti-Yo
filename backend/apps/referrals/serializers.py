@@ -162,3 +162,28 @@ class ReferralCreateSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+
+class CitizenReferralCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Referral
+        fields = [
+            "organisation",
+            "rights_topic",
+            "summary",
+            "district",
+            "language",
+            "preferred_support_channel",
+            "citizen_consent_to_share",
+        ]
+
+    def validate_citizen_consent_to_share(
+        self,
+        value,
+    ):
+        if not value:
+            raise serializers.ValidationError(
+                "Citizen consent is required before creating a referral."
+            )
+
+        return value

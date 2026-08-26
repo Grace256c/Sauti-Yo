@@ -59,3 +59,16 @@ urlpatterns += [
         name="partner-preferences",
     ),
 ]
+
+
+
+from .views import PublicPartnerMatchAPIView
+
+
+urlpatterns += [
+    path(
+        "matches/",
+        PublicPartnerMatchAPIView.as_view(),
+        name="partner-public-matches",
+    ),
+]

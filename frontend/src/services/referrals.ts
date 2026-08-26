@@ -81,3 +81,27 @@ export async function updateReferralStatus(
     },
   );
 }
+
+
+
+export interface CitizenReferralPayload {
+  organisation: number;
+  rights_topic?: number | null;
+  summary: string;
+  district: string;
+  language: string;
+  preferred_support_channel: string;
+  citizen_consent_to_share: boolean;
+}
+
+export async function createCitizenReferral(
+  payload: CitizenReferralPayload,
+) {
+  return apiRequest<Referral>(
+    "/api/referrals/citizen/create/",
+    {
+      method: "POST",
+      body: payload,
+    },
+  );
+}

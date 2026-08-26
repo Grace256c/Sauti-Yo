@@ -255,3 +255,37 @@ class PartnerPreferencesSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+
+class PublicPartnerMatchSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    organisation_name = serializers.CharField()
+    organisation_type = serializers.CharField()
+    service_description = serializers.CharField()
+    public_phone = serializers.CharField()
+    public_email = serializers.EmailField()
+    website = serializers.CharField()
+    districts_served = serializers.ListField(
+        child=serializers.CharField()
+    )
+    nationwide = serializers.BooleanField()
+    languages = serializers.ListField(
+        child=serializers.CharField()
+    )
+    support_channels = serializers.ListField(
+        child=serializers.CharField()
+    )
+    rights_categories = serializers.ListField(
+        child=serializers.CharField()
+    )
+    support_types = serializers.ListField(
+        child=serializers.CharField()
+    )
+    free_services = serializers.BooleanField()
+    appointment_required = serializers.BooleanField()
+    availability_note = serializers.CharField()
+    score = serializers.IntegerField()
+    reasons = serializers.ListField(
+        child=serializers.CharField()
+    )
