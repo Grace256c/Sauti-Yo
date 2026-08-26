@@ -4,6 +4,7 @@ from django.db import transaction
 from apps.content.models import ChannelContent
 from apps.rights.models import (
     ActionStep,
+    IssueOutcome,
     RightsTopic,
     Situation,
     SituationRightsTopic,
@@ -102,8 +103,73 @@ class Command(BaseCommand):
                 },
             )
 
+
         # -------------------------------------------------
-        # 4. CHANNEL CONTENT
+        # 4. ISSUE OUTCOME
+        # -------------------------------------------------
+
+       
+        issue_outcomes = [
+            ("work-employment", "unpaid", "Your situation appears to involve a pay problem."),
+            ("work-employment", "dismissed", "Your situation appears to involve dismissal or suspension."),
+            ("work-employment", "treatment", "Your situation appears to involve workplace treatment."),
+            ("work-employment", "contract", "Your situation appears to involve your work agreement."),
+            ("work-employment", "other", "Your situation involves another workplace concern."),
+
+            ("safety-protection", "violence", "Your situation involves a serious safety concern."),
+            ("safety-protection", "threats", "Your situation appears to involve threats or intimidation."),
+            ("safety-protection", "harassment", "Your situation appears to involve harassment."),
+            ("safety-protection", "abuse", "Your situation appears to involve abuse."),
+            ("safety-protection", "other", "You have identified another safety concern."),
+
+            ("land-housing", "ownership", "Your situation appears to involve land or property ownership."),
+            ("land-housing", "eviction", "Your situation appears to involve eviction."),
+            ("land-housing", "boundary", "Your situation appears to involve a boundary dispute."),
+            ("land-housing", "tenancy", "Your situation appears to involve a landlord or tenant issue."),
+            ("land-housing", "documents", "Your situation appears to involve property documents."),
+            ("land-housing", "other", "Your situation involves another land or housing concern."),
+
+            ("family-inheritance", "inheritance", "Your situation appears to involve inheritance."),
+            ("family-inheritance", "children", "Your situation appears to involve children or family responsibilities."),
+            ("family-inheritance", "marriage", "Your situation appears to involve marriage or separation."),
+            ("family-inheritance", "property", "Your situation appears to involve family property or money."),
+            ("family-inheritance", "other", "Your situation involves another family concern."),
+
+            ("public-services", "access", "Your situation appears to involve access to a public service."),
+            ("public-services", "decision", "Your situation appears to involve a public decision."),
+            ("public-services", "delay", "Your situation appears to involve a delay or lack of response."),
+            ("public-services", "treatment", "Your situation appears to involve unfair treatment by a public institution."),
+            ("public-services", "complaint", "You want to understand how to make a complaint."),
+            ("public-services", "other", "Your situation involves another public-service concern."),
+
+            ("community-discrimination", "discrimination", "Your situation appears to involve discrimination."),
+            ("community-discrimination", "excluded", "Your situation appears to involve unfair exclusion."),
+            ("community-discrimination", "harassment", "Your situation appears to involve harassment or degrading treatment."),
+            ("community-discrimination", "community", "Your situation appears to involve a community decision or action."),
+            ("community-discrimination", "other", "Your situation involves another community concern."),
+        ]
+
+        for category_slug, issue_slug, heading in issue_outcomes:
+            issue_outcome, _ = IssueOutcome.objects.update_or_create(
+                category_slug=category_slug,
+                issue_slug=issue_slug,
+                defaults={
+                    "heading": heading,
+                    "introduction": (
+                        "This outcome is mapped to the citizen rights journey "
+                        "and requires verified content before production use."
+                    ),
+                    "is_active": True,
+                },
+            )
+
+            if category_slug == "work-employment":
+                issue_outcome.situation = situation
+                issue_outcome.save(update_fields=["situation"])
+                issue_outcome.rights_topics.set([rights_topic])
+
+        # -------------------------------------------------
+        # 5. CHANNEL CONTENT
         # -------------------------------------------------
         #
         # Multilingual access supports accessibility.

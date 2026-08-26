@@ -3,13 +3,36 @@ from django.test import TestCase
 from rest_framework.test import APIClient
 
 from .models import (
+
     IssueOutcome,
     RightsTopic,
     Situation,
+    
 )
 
 
 class IssueOutcomeAPITests(TestCase):
+
+    def test_unlinked_issue_outcome_returns_200(self):
+        IssueOutcome.objects.create(
+        category_slug="safety-protection",
+        issue_slug="violence",
+        heading="Your situation involves a serious safety concern.",
+        introduction=(
+            "This outcome is mapped to the citizen rights journey "
+            "and requires verified content before production use."
+        ),
+    )
+
+        response = self.client.get(
+        "/api/rights/outcomes/safety-protection/violence/",
+        HTTP_HOST="localhost",
+    )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.data["situation"])
+        self.assertEqual(response.data["rights_topics"], [])
+        
     def setUp(self):
         self.client = APIClient()
 
