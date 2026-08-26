@@ -195,7 +195,7 @@ class ReferralCreateAPIView(APIView):
 
     def _generate_reference(self):
         return (
-            f"SY-REF-{uuid4().hex[:12].upper()}"
+            f"SY-REF-{uuid4().hex.upper()}"
         )
 
 
@@ -494,5 +494,5 @@ class CitizenReferralCreateAPIView(APIView):
 
     def _generate_reference(self):
         return (
-            f"SY-REF-{uuid4().hex[:12].upper()}"
+            f"SY-REF-{uuid4().hex.upper()}"
         )
