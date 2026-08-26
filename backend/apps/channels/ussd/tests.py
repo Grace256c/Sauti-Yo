@@ -549,3 +549,85 @@ class ActionStepsTests(TestCase):
         ActionStep.objects.all().delete()
         text, ended = menus.render_action_steps(self._session())
         self.assertIn("No action steps", text)
+
+
+from apps.support.models import SupportService
+
+
+class SupportContactsTests(TestCase):
+    def setUp(self):
+        self.topic = RightsTopic.objects.create(
+            slug="topic-a", title="Topic A", summary="S"
+        )
+        self.service = SupportService.objects.create(
+            name="Legal Aid Clinic", phone_number="0800111222"
+        )
+        self.topic.support_services.add(self.service)
+
+    def _session(self, chunk_index=0):
+        return UssdSession(
+            state="support_contacts",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "topic-a",
+                "chunk_index": chunk_index,
+            },
+        )
+
+    def test_render_lists_contact_name_and_phone(self):
+        text, ended = menus.render_support_contacts(self._session())
+        self.assertIn("Legal Aid Clinic", text)
+        self.assertIn("0800111222", text)
+        self.assertFalse(ended)
+
+    def test_render_with_no_contacts_shows_empty_message(self):
+        self.topic.support_services.clear()
+        text, ended = menus.render_support_contacts(self._session())
+        self.assertIn("No support contacts", text)
+
+    def test_transition_back_returns_to_topic_detail(self):
+        next_state, context = menus.transition_support_contacts(
+            self._session(), "0"
+        )
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 9999)
+
+    def test_render_last_chunk_does_not_end_session(self):
+        text, ended = menus.render_support_contacts(self._session(9999))
+        self.assertFalse(ended)
+
+
+class EmergencyListTests(TestCase):
+    def setUp(self):
+        self.emergency_service = SupportService.objects.create(
+            name="Police Hotline", phone_number="999", is_emergency_service=True
+        )
+        SupportService.objects.create(
+            name="Regular Clinic",
+            phone_number="0800000000",
+            is_emergency_service=False,
+        )
+
+    def _session(self, chunk_index=0):
+        return UssdSession(
+            state="emergency_list", language="en", context={"chunk_index": chunk_index}
+        )
+
+    def test_render_only_lists_emergency_services(self):
+        text, ended = menus.render_emergency_list(self._session())
+        self.assertIn("Police Hotline", text)
+        self.assertNotIn("Regular Clinic", text)
+
+    def test_transition_back_returns_to_main_menu(self):
+        next_state, context = menus.transition_emergency_list(self._session(), "0")
+        self.assertEqual(next_state, "main_menu")
+
+    def test_render_with_no_emergency_contacts_shows_empty_message(self):
+        SupportService.objects.all().delete()
+        text, ended = menus.render_emergency_list(self._session())
+        self.assertIn("No emergency contacts", text)
+
+    def test_render_last_chunk_does_not_end_session(self):
+        text, ended = menus.render_emergency_list(self._session(9999))
+        self.assertFalse(ended)

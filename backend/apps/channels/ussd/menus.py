@@ -475,3 +475,114 @@ def transition_action_steps(session, user_input):
     if user_input == "0":
         return _back_to_topic_detail(situation_slug, topic_slug)
     return None
+
+
+from apps.support.models import SupportService
+
+
+def _format_contacts(services):
+    lines = []
+    for service in services:
+        phone = service.phone_number or service.alternate_phone_number or "N/A"
+        lines.append(f"{service.name}: {phone}")
+    return "\n".join(lines)
+
+
+def render_support_contacts(session):
+    topic = RightsTopic.objects.filter(
+        slug=session.context.get("topic_slug"), is_active=True
+    ).first()
+    if topic is None:
+        return get_copy("ussd.not_found", session.language), False
+
+    services = list(topic.support_services.filter(is_active=True).order_by("name"))
+    chunk_index = session.context.get("chunk_index", 0)
+    back = f"0. {get_copy('ussd.back', session.language)}"
+
+    if not services:
+        body = get_copy("ussd.no_support_contacts", session.language)
+        return f"{body}\n\n{back}", False
+
+    screen, _ = _chunked_screen(
+        _format_contacts(services), chunk_index, back, session.language
+    )
+    return screen, False
+
+
+def transition_support_contacts(session, user_input):
+    situation_slug = session.context.get("situation_slug")
+    topic_slug = session.context.get("topic_slug")
+    topic = RightsTopic.objects.filter(slug=topic_slug, is_active=True).first()
+    if topic is None:
+        return "situation_list", {"page": 0}
+
+    services = list(topic.support_services.filter(is_active=True).order_by("name"))
+    if not services:
+        if user_input == "0":
+            return _back_to_topic_detail(situation_slug, topic_slug)
+        return None
+
+    chunk_index = session.context.get("chunk_index", 0)
+    is_last = _is_last_chunk(_format_contacts(services), chunk_index)
+
+    if not is_last:
+        if user_input == "1":
+            return (
+                "support_contacts",
+                {**session.context, "chunk_index": chunk_index + 1},
+            )
+        if user_input == "0":
+            return _back_to_topic_detail(situation_slug, topic_slug)
+        return None
+
+    if user_input == "0":
+        return _back_to_topic_detail(situation_slug, topic_slug)
+    return None
+
+
+def render_emergency_list(session):
+    services = list(
+        SupportService.objects.filter(
+            is_emergency_service=True, is_active=True
+        ).order_by("name")
+    )
+    chunk_index = session.context.get("chunk_index", 0)
+    back = f"0. {get_copy('ussd.back', session.language)}"
+
+    if not services:
+        body = get_copy("ussd.no_emergency_contacts", session.language)
+        return f"{body}\n\n{back}", False
+
+    screen, _ = _chunked_screen(
+        _format_contacts(services), chunk_index, back, session.language
+    )
+    return screen, False
+
+
+def transition_emergency_list(session, user_input):
+    services = list(
+        SupportService.objects.filter(
+            is_emergency_service=True, is_active=True
+        ).order_by("name")
+    )
+    if not services:
+        if user_input == "0":
+            return "main_menu", {}
+        return None
+
+    chunk_index = session.context.get("chunk_index", 0)
+    is_last = _is_last_chunk(_format_contacts(services), chunk_index)
+
+    if not is_last:
+        if user_input == "1":
+            return (
+                "emergency_list",
+                {**session.context, "chunk_index": chunk_index + 1},
+            )
+        if user_input == "0":
+            return "main_menu", {}
+        return None
+
+    if user_input == "0":
+        return "main_menu", {}
+    return None
