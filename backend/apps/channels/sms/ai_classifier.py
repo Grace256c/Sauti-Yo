@@ -43,7 +43,12 @@ def classify_situation(text):
         return None
 
     valid_slugs = {s["slug"] for s in situations}
-    catalog = "\n".join(f"{s['slug']}: {s['title']}" for s in situations)
+    catalog = "\n".join(
+        f"{s['slug']}: {s['title']} - {s['description']}"
+        if s["description"]
+        else f"{s['slug']}: {s['title']}"
+        for s in situations
+    )
 
     try:
         client = _get_client()
