@@ -27,12 +27,14 @@ import {
 } from "../../data/supportData";
 
 import {
-  matchPartners,
-  partnerProfiles,
-} from "../../data/partnerData";
+  findPartnerMatches,
+} from "../../services/support";
 
 import type {
-  PartnerMatch,
+  PartnerMatchResult,
+} from "../../services/support";
+
+import type {
   SupportChannel,
 } from "../../data/partnerData";
 
@@ -137,7 +139,7 @@ export default function Support() {
   const [
     matches,
     setMatches,
-  ] = useState<PartnerMatch[]>([]);
+  ] = useState<PartnerMatchResult[]>([]);
 
   const canSearch =
     Boolean(selectedCategory) &&
@@ -150,7 +152,7 @@ export default function Support() {
     setMatches([]);
   };
 
-  const handleFindSupport = () => {
+  const handleFindSupport = async () => {
     if (
       !selectedCategory ||
       !supportMethod ||
@@ -160,22 +162,18 @@ export default function Support() {
     }
 
     const partnerMatches =
-      matchPartners(
-        partnerProfiles,
-        {
-          category:
-            selectedCategory.slug,
+      await findPartnerMatches({
+        category:
+          selectedCategory.slug,
+        district,
+        language,
+        channel:
+          supportMethod,
+      });
 
-          district,
-
-          language,
-
-          preferredChannel:
-            supportMethod,
-        },
-      );
-
-    setMatches(partnerMatches);
+    setMatches(
+      partnerMatches,
+    );
 
     setMatchRequested(true);
 
@@ -618,12 +616,14 @@ export default function Support() {
                   <div className="mt-8 space-y-5">
                     {matches.map(
                       ({
-                        partner,
+                        id,
+                        organisation_name,
+                        service_description,
                         score,
                         reasons,
                       }) => (
                         <article
-                          key={partner.id}
+                          key={id}
                           className="card-surface p-6 sm:p-7"
                         >
                           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
@@ -636,7 +636,7 @@ export default function Support() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <h3 className="text-xl font-semibold text-text-primary">
                                     {
-                                      partner.organisationName
+                                      organisation_name
                                     }
                                   </h3>
 
@@ -649,7 +649,7 @@ export default function Support() {
 
                                 <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
                                   {
-                                    partner.serviceDescription
+                                    service_description
                                   }
                                 </p>
                               </div>
