@@ -1,7 +1,10 @@
+from django.shortcuts import get_object_or_404
+
 from rest_framework import generics
 
-from .models import RightsTopic, Situation
+from .models import IssueOutcome, RightsTopic, Situation
 from .serializers import (
+    IssueOutcomeSerializer,
     RightsTopicSerializer,
     SituationSerializer,
 )
@@ -9,6 +12,7 @@ from .serializers import (
 
 class SituationListAPIView(generics.ListAPIView):
     serializer_class = SituationSerializer
+
 
     def get_queryset(self):
         return (
@@ -70,4 +74,30 @@ class RightsTopicDetailAPIView(
                 "safety_responses",
                 "support_services",
             )
+        )
+
+
+class IssueOutcomeDetailAPIView(
+    generics.RetrieveAPIView
+):
+    serializer_class = IssueOutcomeSerializer
+
+    def get_queryset(self):
+        return (
+            IssueOutcome.objects.filter(is_active=True)
+            .select_related("situation")
+            .prefetch_related(
+                "rights_topics__action_steps",
+                "rights_topics__safety_responses",
+                "rights_topics__support_services",
+            )
+        )
+
+    def get_object(self):
+        queryset = self.get_queryset()
+
+        return get_object_or_404(
+            queryset,
+            category_slug=self.kwargs["category_slug"],
+            issue_slug=self.kwargs["issue_slug"],
         )

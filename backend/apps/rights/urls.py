@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    IssueOutcomeDetailAPIView,
     RightsTopicDetailAPIView,
     RightsTopicListAPIView,
     SituationDetailAPIView,
@@ -28,4 +29,10 @@ urlpatterns = [
         RightsTopicDetailAPIView.as_view(),
         name="rights-topic-detail",
     ),
+
+    path(
+    "outcomes/<slug:category_slug>/<slug:issue_slug>/",
+    IssueOutcomeDetailAPIView.as_view(),
+    name="issue-outcome-detail",
+),
 ]

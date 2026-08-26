@@ -6,6 +6,7 @@ from apps.support.serializers import (
 
 from .models import (
     ActionStep,
+    IssueOutcome,
     RightsTopic,
     SafetyResponse,
     Situation,
@@ -107,3 +108,40 @@ class SituationSerializer(serializers.ModelSerializer):
             "rights_links",
             "is_active",
         ]
+
+class IssueOutcomeSituationSerializer(
+    serializers.ModelSerializer
+):
+    class Meta:
+        model = Situation
+        fields = [
+            "id",
+            "slug",
+            "title",
+            "description",
+            "risk_level",
+        ]        
+
+class IssueOutcomeSerializer(serializers.ModelSerializer):
+    rights_topics = RightsTopicSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    situation = IssueOutcomeSituationSerializer(
+    read_only=True,
+)
+
+    class Meta:
+        model = IssueOutcome
+        fields = [
+            "id",
+            "category_slug",
+            "issue_slug",
+            "heading",
+            "introduction",
+            "evidence_items",
+            "situation",
+            "rights_topics",
+            "is_active",
+        ]        

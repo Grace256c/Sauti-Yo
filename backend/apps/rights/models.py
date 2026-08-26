@@ -113,6 +113,64 @@ class SituationRightsTopic(models.Model):
     def __str__(self):
         return f"{self.situation} → {self.rights_topic}"
 
+class IssueOutcome(models.Model):
+    category_slug = models.SlugField()
+
+    issue_slug = models.SlugField()
+
+    heading = models.CharField(
+        max_length=255,
+    )
+
+    introduction = models.TextField()
+
+    situation = models.ForeignKey(
+        Situation,
+        on_delete=models.PROTECT,
+        related_name="issue_outcomes",
+        null=True,
+        blank=True,
+    )
+
+    rights_topics = models.ManyToManyField(
+        RightsTopic,
+        related_name="issue_outcomes",
+        blank=True,
+    )
+
+    evidence_items = models.JSONField(
+        default=list,
+        blank=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "category_slug",
+                    "issue_slug",
+                ],
+                name="unique_issue_outcome",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.category_slug} → "
+            f"{self.issue_slug}"
+        )
 
 class ActionStep(models.Model):
     rights_topic = models.ForeignKey(
