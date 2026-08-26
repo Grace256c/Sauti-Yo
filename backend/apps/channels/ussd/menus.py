@@ -9,6 +9,9 @@ DEFAULT_COPY = {
     "ussd.language_prompt": (
         "1. English\n2. Luganda\n3. Kiswahili\n4. Runyankole"
     ),
+    "ussd.language_unavailable": (
+        "That language is not available yet. Please choose English for now."
+    ),
     "ussd.main_menu": "1. Find my rights\n2. Get help now\n0. Exit",
     "ussd.invalid_choice": "Invalid choice.",
     "ussd.too_many_invalid": (
@@ -117,6 +120,10 @@ def paginate_items(items, page, page_size=PAGE_SIZE):
 def render_language_select(session):
     body = get_copy("ussd.welcome", session.language)
     prompt = get_copy("ussd.language_prompt", session.language)
+    if session.context.get("unavailable_notice"):
+        requested = session.context.get("requested_language", session.language)
+        notice = get_copy("ussd.language_unavailable", requested)
+        return f"{notice}\n\n{body}\n{prompt}", False
     return f"{body}\n{prompt}", False
 
 
@@ -125,6 +132,11 @@ def transition_language_select(session, user_input):
     language = mapping.get(user_input)
     if language is None:
         return None
+    if language != "en":
+        return "language_select", {
+            "unavailable_notice": True,
+            "requested_language": language,
+        }
     session.language = language
     return "main_menu", {}
 
