@@ -294,7 +294,8 @@ def render_topic_detail(session):
     chunk_index = session.context.get("chunk_index", 0)
     menu = get_copy("ussd.topic_menu", session.language)
     text = topic.summary or topic.title
-    return _chunked_screen(text, chunk_index, menu, session.language)
+    screen, _ = _chunked_screen(text, chunk_index, menu, session.language)
+    return screen, False
 
 
 def transition_topic_detail(session, user_input):
@@ -355,7 +356,8 @@ def render_safety_gate(session):
     message = safety.message if safety else topic.summary or topic.title
     chunk_index = session.context.get("chunk_index", 0)
     options = get_copy("ussd.safety_continue", session.language)
-    return _chunked_screen(message, chunk_index, options, session.language)
+    screen, _ = _chunked_screen(message, chunk_index, options, session.language)
+    return screen, False
 
 
 def transition_safety_gate(session, user_input):

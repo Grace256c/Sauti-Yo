@@ -426,6 +426,11 @@ class TopicDetailTests(TestCase):
         )
         self.assertEqual(next_state, "situation_list")
 
+    def test_render_last_chunk_does_not_end_session(self):
+        text, ended = menus.render_topic_detail(self._session(9999))
+        self.assertIn("1. Action steps", text)
+        self.assertFalse(ended)
+
 
 class SafetyGateTests(TestCase):
     def setUp(self):
@@ -466,6 +471,17 @@ class SafetyGateTests(TestCase):
 
     def test_transition_rejects_invalid_choice_on_last_chunk(self):
         self.assertIsNone(menus.transition_safety_gate(self._session(9999), "9"))
+
+    def test_render_last_chunk_does_not_end_session(self):
+        text, ended = menus.render_safety_gate(self._session(9999))
+        self.assertIn("1. Continue", text)
+        self.assertFalse(ended)
+
+    def test_render_falls_back_to_summary_when_no_safety_response(self):
+        self.safety.delete()
+        text, ended = menus.render_safety_gate(self._session(0))
+        self.assertIn("Summary", text)
+        self.assertFalse(ended)
 
 
 class ActionStepsTests(TestCase):
