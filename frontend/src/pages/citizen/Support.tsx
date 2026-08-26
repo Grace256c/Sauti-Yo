@@ -27,12 +27,18 @@ import {
 } from "../../data/supportData";
 
 import {
-  matchPartners,
-  partnerProfiles,
-} from "../../data/partnerData";
+  findPartnerMatches,
+} from "../../services/support";
+
+import {
+  createCitizenReferral,
+} from "../../services/referrals";
 
 import type {
-  PartnerMatch,
+  PartnerMatchResult,
+} from "../../services/support";
+
+import type {
   SupportChannel,
 } from "../../data/partnerData";
 
@@ -137,7 +143,33 @@ export default function Support() {
   const [
     matches,
     setMatches,
-  ] = useState<PartnerMatch[]>([]);
+  ] = useState<PartnerMatchResult[]>([]);
+
+  const [
+    selectedPartnerId,
+    setSelectedPartnerId,
+  ] = useState<number | null>(null);
+
+  const [
+    consentToShare,
+    setConsentToShare,
+  ] = useState(false);
+
+  const [
+    referralCreating,
+    setReferralCreating,
+  ] = useState(false);
+
+  const [
+    referralReference,
+    setReferralReference,
+  ] = useState("");
+
+  const [
+    referralError,
+    setReferralError,
+  ] = useState("");
+
 
   const canSearch =
     Boolean(selectedCategory) &&
@@ -150,7 +182,7 @@ export default function Support() {
     setMatches([]);
   };
 
-  const handleFindSupport = () => {
+  const handleFindSupport = async () => {
     if (
       !selectedCategory ||
       !supportMethod ||
@@ -160,22 +192,18 @@ export default function Support() {
     }
 
     const partnerMatches =
-      matchPartners(
-        partnerProfiles,
-        {
-          category:
-            selectedCategory.slug,
+      await findPartnerMatches({
+        category:
+          selectedCategory.slug,
+        district,
+        language,
+        channel:
+          supportMethod,
+      });
 
-          district,
-
-          language,
-
-          preferredChannel:
-            supportMethod,
-        },
-      );
-
-    setMatches(partnerMatches);
+    setMatches(
+      partnerMatches,
+    );
 
     setMatchRequested(true);
 
@@ -190,6 +218,62 @@ export default function Support() {
         });
     }, 50);
   };
+
+
+  const handleCreateReferral =
+    async (
+      organisationId: number,
+    ) => {
+      if (
+        !selectedCategory ||
+        !supportMethod ||
+        !consentToShare
+      ) {
+        return;
+      }
+
+      setReferralCreating(true);
+      setReferralError("");
+
+      try {
+        const referral =
+          await createCitizenReferral({
+            organisation:
+              organisationId,
+
+            summary:
+              `Citizen requested support for ${selectedCategory.title}.`,
+
+            district,
+
+            language,
+
+            preferred_support_channel:
+              supportMethod ===
+              "in-person"
+                ? "in_person"
+                : supportMethod,
+
+            citizen_consent_to_share:
+              true,
+          });
+
+        setReferralReference(
+          referral.reference,
+        );
+
+        setSelectedPartnerId(null);
+        setConsentToShare(false);
+      } catch (error) {
+        setReferralError(
+          error instanceof Error
+            ? error.message
+            : "Unable to create referral.",
+        );
+      } finally {
+        setReferralCreating(false);
+      }
+    };
 
   return (
     <>
@@ -618,12 +702,14 @@ export default function Support() {
                   <div className="mt-8 space-y-5">
                     {matches.map(
                       ({
-                        partner,
+                        id,
+                        organisation_name,
+                        service_description,
                         score,
                         reasons,
                       }) => (
                         <article
-                          key={partner.id}
+                          key={id}
                           className="card-surface p-6 sm:p-7"
                         >
                           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
@@ -636,7 +722,7 @@ export default function Support() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <h3 className="text-xl font-semibold text-text-primary">
                                     {
-                                      partner.organisationName
+                                      organisation_name
                                     }
                                   </h3>
 
@@ -649,7 +735,7 @@ export default function Support() {
 
                                 <p className="mt-3 max-w-xl text-sm leading-6 text-text-secondary">
                                   {
-                                    partner.serviceDescription
+                                    service_description
                                   }
                                 </p>
                               </div>
@@ -692,12 +778,101 @@ export default function Support() {
                           <div className="mt-7 border-t border-border pt-6">
                             <button
                               type="button"
+                              onClick={() => {
+                                setSelectedPartnerId(
+                                  id,
+                                );
+                                setConsentToShare(
+                                  false,
+                                );
+                                setReferralError(
+                                  "",
+                                );
+                              }}
                               className="btn-primary"
                             >
                               View Support Option
 
                               <ArrowRight className="h-4 w-4" />
                             </button>
+
+                            {selectedPartnerId ===
+                              id && (
+                              <div className="mt-5 border border-gold/30 bg-gold/5 p-5">
+                                <h4 className="font-semibold text-text-primary">
+                                  Request a referral
+                                </h4>
+
+                                <p className="mt-2 text-sm leading-6 text-text-secondary">
+                                  Sauti Yo will share the referral details shown here with this organisation only after you give consent.
+                                </p>
+
+                                <label className="mt-4 flex cursor-pointer items-start gap-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={
+                                      consentToShare
+                                    }
+                                    onChange={(
+                                      event,
+                                    ) =>
+                                      setConsentToShare(
+                                        event.target.checked,
+                                      )
+                                    }
+                                    className="mt-1 h-4 w-4 accent-[#c99522]"
+                                  />
+
+                                  <span className="text-sm leading-6 text-text-secondary">
+                                    I consent to Sauti Yo sharing my selected rights category, district, preferred language and support method with this provider for the purpose of this referral.
+                                  </span>
+                                </label>
+
+                                {referralError && (
+                                  <p className="mt-4 text-sm text-danger">
+                                    {
+                                      referralError
+                                    }
+                                  </p>
+                                )}
+
+                                <button
+                                  type="button"
+                                  disabled={
+                                    !consentToShare ||
+                                    referralCreating
+                                  }
+                                  onClick={() =>
+                                    void handleCreateReferral(
+                                      id,
+                                    )
+                                  }
+                                  className="btn-primary mt-5 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {referralCreating
+                                    ? "Creating referral..."
+                                    : "Confirm Referral"}
+                                </button>
+                              </div>
+                            )}
+
+                            {referralReference && (
+                              <div className="mt-5 border border-success/30 bg-success/5 p-4">
+                                <p className="font-semibold text-text-primary">
+                                  Referral created
+                                </p>
+
+                                <p className="mt-2 text-sm text-text-secondary">
+                                  Your referral reference is{" "}
+                                  <strong>
+                                    {
+                                      referralReference
+                                    }
+                                  </strong>
+                                  .
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </article>
                       ),
@@ -797,9 +972,8 @@ export default function Support() {
               </p>
 
               <p className="mt-4 text-sm leading-6 text-white/50">
-                The next referral stage will include explicit
-                consent before identifiable information can be
-                shared with a partner.
+                Sauti Yo requires explicit consent before referral
+                information is shared with a selected partner.
               </p>
             </div>
           </div>

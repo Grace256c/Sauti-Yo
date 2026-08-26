@@ -54,19 +54,21 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party
+    # Third party
     "rest_framework",
     "corsheaders",
 
-    # Sauti Yo
+    # Local apps
     "apps.core",
+    "apps.content",
     "apps.rights",
     "apps.support",
     "apps.channels",
-    "apps.feedback",
-    "apps.content",
-    "apps.campaigns",
     "apps.analytics",
+    "apps.campaigns",
+    "apps.feedback",
+    "apps.partners",
+    "apps.referrals",
 ]
 
 MIDDLEWARE = [
@@ -82,6 +84,15 @@ MIDDLEWARE = [
 ]
 CORS_ALLOWED_ORIGINS = [
     os.getenv("FRONTEND_URL", "http://localhost:5173"),
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    os.getenv(
+        "FRONTEND_URL",
+        "http://localhost:5173",
+    ),
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -199,3 +210,7 @@ LOGGING = {
         "level": "INFO",
     },
 }
+
+# User-uploaded files
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
