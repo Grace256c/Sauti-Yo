@@ -149,11 +149,11 @@ Linked support services: **FIDA-Uganda**, **Uganda Law Society Legal Aid Project
 | FIDA-Uganda (free legal aid) | 0800 111 511 | No | [fidauganda.or.ug/contact-us](https://fidauganda.or.ug/contact-us) |
 | Uganda Law Society Legal Aid Project | 0800 100 150 | No | [Contact info PDF](https://sird.ealawsociety.org/wp-content/uploads/2023/02/Contact-info-for-Uganda-Law-Society.pdf) |
 
-Each gets `coverage="National"`, `availability` left blank (not confidently sourced — a reviewer should fill this in), `verification_status` field doesn't exist on `SupportService` (only on `RightsTopic`) — instead `is_active=True` and the source is recorded in this spec doc for the reviewer, since the model has no `source_url` field of its own for support services. **Gap noted below.**
+Each gets `coverage="National"`, `availability` left blank (not confidently sourced — a reviewer should fill this in), and `verification_status="review_required"` (the model does have this field, with that as its default — corrected from an earlier draft of this spec that claimed otherwise).
 
 ## Known model gap (not fixed in this pass)
 
-`SupportService` has no `source_name`/`source_url`/`verification_status` fields — only `RightsTopic` does. This spec's citations for phone numbers live in this document, not in the database, so a future reviewer checking the admin panel won't see where a number came from. Flagged as a follow-up (either add those fields to `SupportService`, or record sourcing in its existing `description` field as a stopgap) — out of scope for this content-seeding pass since it's a schema change, not a content one.
+`SupportService` has `verification_status` but no `source_name`/`source_url` fields like `RightsTopic` does. This spec's citations for phone numbers live in this document, not in the database, so a future reviewer checking the admin panel won't see where a number came from. Flagged as a follow-up (either add those fields to `SupportService`, or record sourcing in its existing `description` field as a stopgap) — out of scope for this content-seeding pass since it's a schema change, not a content one.
 
 ## Testing
 
