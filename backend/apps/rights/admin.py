@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     ActionStep,
+    IssueOutcome,
     RightsTopic,
     SafetyResponse,
     Situation,
@@ -91,6 +92,33 @@ class SituationRightsTopicAdmin(admin.ModelAdmin):
         "rights_topic__title",
     )
 
+@admin.register(IssueOutcome)
+class IssueOutcomeAdmin(admin.ModelAdmin):
+    list_display = (
+        "category_slug",
+        "issue_slug",
+        "situation",
+        "is_active",
+        "updated_at",
+    )
+
+    list_filter = (
+        "category_slug",
+        "is_active",
+    )
+
+    search_fields = (
+        "category_slug",
+        "issue_slug",
+        "heading",
+        "introduction",
+        "situation__title",
+        "rights_topics__title",
+    )
+
+    filter_horizontal = (
+        "rights_topics",
+    )
 
 @admin.register(ActionStep)
 class ActionStepAdmin(admin.ModelAdmin):
