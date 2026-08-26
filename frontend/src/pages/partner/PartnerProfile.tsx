@@ -1,43 +1,65 @@
 import {
+  AlertCircle,
   ArrowRight,
   Building2,
   Check,
   FileText,
   Globe2,
+  LoaderCircle,
   MapPin,
   Phone,
   Save,
   ShieldCheck,
   UserRound,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { Link } from "react-router-dom";
+
+import {
+  usePartnerAuth,
+} from "../../context/PartnerAuthContext";
+
+import { ApiError } from "../../services/api";
+
+import {
+  getPartnerOrganisation,
+  updatePartnerOrganisation,
+  updatePartnerServices,
+  type PartnerOrganisation,
+} from "../../services/partners";
+
+/* =========================================================
+   TYPES
+========================================================= */
 
 type OrganisationType =
   | ""
-  | "legal-aid"
+  | "legal_aid"
   | "ngo"
   | "cbo"
   | "government"
-  | "law-firm"
-  | "protection-service"
-  | "mediation-service"
+  | "law_firm"
+  | "protection_service"
+  | "mediation_service"
   | "other";
 
 type ProfileForm = {
   organisationName: string;
   organisationType: OrganisationType;
+
   registrationNumber: string;
   yearEstablished: string;
-  description: string;
 
-  contactName: string;
-  contactRole: string;
-  contactEmail: string;
-  contactPhone: string;
+  description: string;
 
   headquartersDistrict: string;
   physicalAddress: string;
+
   areasServed: string[];
 
   website: string;
@@ -45,8 +67,9 @@ type ProfileForm = {
   publicPhone: string;
 };
 
-const PROFILE_STORAGE_KEY =
-  "sauti-yo-partner-profile-draft";
+/* =========================================================
+   OPTIONS
+========================================================= */
 
 const districtOptions = [
   "Kampala",
@@ -71,7 +94,7 @@ const organisationTypes: {
     label: "Select organisation type",
   },
   {
-    value: "legal-aid",
+    value: "legal_aid",
     label: "Legal aid organisation",
   },
   {
@@ -87,15 +110,15 @@ const organisationTypes: {
     label: "Government institution",
   },
   {
-    value: "law-firm",
+    value: "law_firm",
     label: "Law firm",
   },
   {
-    value: "protection-service",
+    value: "protection_service",
     label: "Protection / safeguarding service",
   },
   {
-    value: "mediation-service",
+    value: "mediation_service",
     label: "Mediation / dispute-resolution service",
   },
   {
@@ -110,104 +133,202 @@ const initialForm: ProfileForm = {
   registrationNumber: "",
   yearEstablished: "",
   description: "",
-
-  contactName: "",
-  contactRole: "",
-  contactEmail: "",
-  contactPhone: "",
-
   headquartersDistrict: "",
   physicalAddress: "",
   areasServed: [],
-
   website: "",
   publicEmail: "",
   publicPhone: "",
 };
 
-function loadSavedProfile(): ProfileForm {
-  try {
-    const stored =
-      sessionStorage.getItem(
-        PROFILE_STORAGE_KEY,
-      );
+/* =========================================================
+   DATA MAPPING
+========================================================= */
 
-    if (!stored) {
-      return initialForm;
-    }
+function organisationToForm(
+  organisation: PartnerOrganisation,
+): ProfileForm {
+  return {
+    organisationName:
+      organisation.support_service.name ?? "",
 
-    const parsed =
-      JSON.parse(stored) as Partial<ProfileForm>;
+    organisationType:
+      organisation.organisation_type as OrganisationType,
 
-    return {
-      ...initialForm,
-      ...parsed,
+    registrationNumber:
+      organisation.registration_number ?? "",
 
-      areasServed:
-        Array.isArray(parsed.areasServed)
-          ? parsed.areasServed
-          : [],
-    };
-  } catch {
-    return initialForm;
-  }
+    yearEstablished:
+      organisation.year_established !== null &&
+      organisation.year_established !== undefined
+        ? String(organisation.year_established)
+        : "",
+
+    description:
+      organisation.support_service.description ?? "",
+
+    headquartersDistrict:
+      organisation.headquarters_district ?? "",
+
+    physicalAddress:
+      organisation.physical_address ?? "",
+
+    areasServed:
+      organisation.service_configuration?.districts_served ??
+      [],
+
+    website:
+      organisation.support_service.website ?? "",
+
+    publicEmail:
+      organisation.public_email ?? "",
+
+    publicPhone:
+      organisation.public_phone ?? "",
+  };
 }
 
+/* =========================================================
+   PAGE
+========================================================= */
+
 export default function PartnerProfile() {
+  const { session } = usePartnerAuth();
+
   const [form, setForm] =
-    useState<ProfileForm>(
-      loadSavedProfile,
-    );
+    useState<ProfileForm>(initialForm);
+
+  const [organisation, setOrganisation] =
+    useState<PartnerOrganisation | null>(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
 
   const [saved, setSaved] =
     useState(false);
 
-  const requiredFields = useMemo(
-    () => [
+  const [error, setError] =
+    useState("");
+
+  const organisationId =
+    session?.membership.organisation_id;
+
+  /* =======================================================
+     LOAD PROFILE
+  ======================================================= */
+
+  useEffect(() => {
+    if (!organisationId) {
+      setLoading(false);
+      return;
+    }
+
+    const activeOrganisationId =
+      organisationId;
+
+    let active = true;
+
+    async function loadProfile() {
+      setLoading(true);
+      setError("");
+
+      try {
+        const data =
+          await getPartnerOrganisation(
+            activeOrganisationId,
+          );
+
+        if (!active) {
+          return;
+        }
+
+        setOrganisation(data);
+
+        setForm(
+          organisationToForm(
+            data,
+          ),
+        );
+      } catch (caughtError) {
+        if (!active) {
+          return;
+        }
+
+        if (
+          caughtError instanceof ApiError
+        ) {
+          setError(
+            caughtError.message,
+          );
+        } else {
+          setError(
+            "Unable to load the organisation profile.",
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [organisationId]);
+
+  /* =======================================================
+     PROFILE COMPLETION
+  ======================================================= */
+
+  const completion = useMemo(() => {
+    const requiredValues = [
       form.organisationName,
       form.organisationType,
       form.description,
-      form.contactName,
-      form.contactRole,
-      form.contactEmail,
-      form.contactPhone,
       form.headquartersDistrict,
       form.physicalAddress,
-    ],
-    [form],
-  );
+    ];
 
-  const completion = useMemo(() => {
-    const complete =
-      requiredFields.filter(
+    const completed =
+      requiredValues.filter(
         (value) =>
           String(value).trim() !== "",
       ).length;
 
     return Math.round(
-      (complete /
-        requiredFields.length) *
+      (completed /
+        requiredValues.length) *
         100,
     );
-  }, [requiredFields]);
+  }, [form]);
 
-  const updateField = <
+  /* =======================================================
+     FORM HELPERS
+  ======================================================= */
+
+  function updateField<
     K extends keyof ProfileForm,
   >(
     field: K,
     value: ProfileForm[K],
-  ) => {
+  ) {
     setForm((current) => ({
       ...current,
       [field]: value,
     }));
 
     setSaved(false);
-  };
+  }
 
-  const toggleDistrict = (
+  function toggleDistrict(
     district: string,
-  ) => {
+  ) {
     setForm((current) => {
       const selected =
         current.areasServed.includes(
@@ -230,26 +351,169 @@ export default function PartnerProfile() {
     });
 
     setSaved(false);
-  };
+  }
 
-  const handleSave = () => {
-    sessionStorage.setItem(
-      PROFILE_STORAGE_KEY,
-      JSON.stringify(form),
+  /* =======================================================
+     SAVE PROFILE
+  ======================================================= */
+
+  async function handleSave() {
+    if (!organisationId) {
+      setError(
+        "No partner organisation is connected to this account.",
+      );
+      return;
+    }
+
+    setSaving(true);
+    setSaved(false);
+    setError("");
+
+    try {
+      let yearEstablished:
+        | number
+        | null = null;
+
+      if (
+        form.yearEstablished.trim()
+      ) {
+        const parsedYear =
+          Number(
+            form.yearEstablished,
+          );
+
+        if (
+          !Number.isInteger(
+            parsedYear,
+          ) ||
+          parsedYear < 0
+        ) {
+          setError(
+            "Please enter a valid year established.",
+          );
+
+          setSaving(false);
+          return;
+        }
+
+        yearEstablished =
+          parsedYear;
+      }
+
+      const updatedOrganisation =
+        await updatePartnerOrganisation(
+          organisationId,
+          {
+            support_service: {
+              name:
+                form.organisationName.trim(),
+
+              description:
+                form.description.trim(),
+
+              website:
+                form.website.trim(),
+            },
+
+            organisation_type:
+              form.organisationType,
+
+            registration_number:
+              form.registrationNumber.trim(),
+
+            year_established:
+              yearEstablished,
+
+            headquarters_district:
+              form.headquartersDistrict,
+
+            physical_address:
+              form.physicalAddress.trim(),
+
+            public_email:
+              form.publicEmail.trim(),
+
+            public_phone:
+              form.publicPhone.trim(),
+          },
+        );
+
+      const updatedServices =
+        await updatePartnerServices(
+          organisationId,
+          {
+            districts_served:
+              form.areasServed,
+          },
+        );
+
+      const combinedOrganisation:
+        PartnerOrganisation = {
+        ...updatedOrganisation,
+
+        service_configuration:
+          updatedServices,
+      };
+
+      setOrganisation(
+        combinedOrganisation,
+      );
+
+      setForm(
+        organisationToForm(
+          combinedOrganisation,
+        ),
+      );
+
+      setSaved(true);
+
+      window.setTimeout(() => {
+        setSaved(false);
+      }, 3000);
+    } catch (caughtError) {
+      if (
+        caughtError instanceof ApiError
+      ) {
+        setError(
+          caughtError.message,
+        );
+      } else {
+        setError(
+          "Unable to save the organisation profile.",
+        );
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[65vh] items-center justify-center px-5">
+        <div className="text-center">
+          <LoaderCircle className="mx-auto h-6 w-6 animate-spin text-gold" />
+
+          <p className="mt-4 text-sm text-text-secondary">
+            Loading organisation
+            profile...
+          </p>
+        </div>
+      </div>
     );
+  }
 
-    setSaved(true);
-
-    window.setTimeout(() => {
-      setSaved(false);
-    }, 3000);
-  };
+  /* =======================================================
+     PAGE
+  ======================================================= */
 
   return (
     <>
-      {/* =====================================================
-          PAGE HEADER
-      ===================================================== */}
+      {/* HEADER */}
+
       <section className="border-b border-border bg-surface">
         <div className="px-5 py-8 sm:px-8 lg:px-10 lg:py-9 xl:px-12">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -263,10 +527,9 @@ export default function PartnerProfile() {
               </h1>
 
               <p className="mt-3 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
-                Tell Sauti Yo who your
-                organisation is, how to
-                contact you and where
-                you operate.
+                Manage your organisation
+                information, location and
+                public contact details.
               </p>
             </div>
 
@@ -294,12 +557,25 @@ export default function PartnerProfile() {
         </div>
       </section>
 
-      {/* =====================================================
-          PROFILE BODY
-      ===================================================== */}
+      {/* CONTENT */}
+
       <div className="px-5 py-7 sm:px-8 lg:px-10 lg:py-8 xl:px-12">
         <div className="mx-auto max-w-6xl">
-          {/* STATUS NOTE */}
+
+          {/* ERROR */}
+
+          {error && (
+            <div className="mb-6 flex items-start gap-3 border border-danger/30 bg-danger/5 p-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" />
+
+              <p className="text-sm leading-6 text-danger">
+                {error}
+              </p>
+            </div>
+          )}
+
+          {/* STATUS */}
+
           <section className="border border-border bg-surface p-5 sm:p-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold">
@@ -311,30 +587,27 @@ export default function PartnerProfile() {
 
               <div className="flex-1">
                 <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold-deep dark:text-gold">
-                  Profile setup
+                  Organisation setup
                 </p>
 
                 <h2 className="mt-2 text-lg font-semibold text-text-primary">
-                  Complete accurate
-                  organisation information.
+                  Complete your partner
+                  profile.
                 </h2>
 
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">
-                  This information will
-                  support verification
-                  and later help Sauti Yo
-                  determine whether your
-                  organisation is
-                  suitable for citizen
-                  referrals.
+                  Your organisation
+                  information is securely
+                  stored through the
+                  Sauti Yo partner
+                  platform.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* =================================================
-              ORGANISATION DETAILS
-          ================================================= */}
+          {/* ORGANISATION DETAILS */}
+
           <FormSection
             icon={Building2}
             eyebrow="Section 01"
@@ -447,7 +720,8 @@ export default function PartnerProfile() {
                     htmlFor="organisation-description"
                     required
                   >
-                    Organisation description
+                    Organisation
+                    description
                   </Label>
 
                   <textarea
@@ -467,139 +741,85 @@ export default function PartnerProfile() {
                   />
 
                   <HelperText>
-                    Keep this factual
-                    and concise. Service
-                    details will be
-                    configured separately
-                    on the Services page.
+                    Give citizens and the
+                    Sauti Yo team a clear
+                    understanding of the
+                    support your
+                    organisation provides.
                   </HelperText>
                 </Field>
               </div>
             </div>
           </FormSection>
 
-          {/* =================================================
-              PRIMARY CONTACT
-          ================================================= */}
+          {/* ACCOUNT CONTACT */}
+
           <FormSection
             icon={UserRound}
             eyebrow="Section 02"
-            title="Primary contact"
-            description="The person Sauti Yo can contact about verification and referrals."
+            title="Account contact"
+            description="The authenticated partner member currently managing this workspace."
           >
             <div className="grid gap-5 md:grid-cols-2">
-              <Field>
-                <Label
-                  htmlFor="contact-name"
-                  required
-                >
-                  Full name
-                </Label>
+              <ReadOnlyField
+                label="Name"
+                value={
+                  [
+                    session?.user
+                      .first_name,
+                    session?.user
+                      .last_name,
+                  ]
+                    .filter(Boolean)
+                    .join(" ") ||
+                  session?.user
+                    .username ||
+                  "—"
+                }
+              />
 
-                <Input
-                  id="contact-name"
-                  value={
-                    form.contactName
-                  }
-                  onChange={(value) =>
-                    updateField(
-                      "contactName",
-                      value,
-                    )
-                  }
-                  placeholder="Primary contact name"
-                />
-              </Field>
+              <ReadOnlyField
+                label="Role"
+                value={formatRole(
+                  session?.membership
+                    .role,
+                )}
+              />
 
-              <Field>
-                <Label
-                  htmlFor="contact-role"
-                  required
-                >
-                  Role / title
-                </Label>
+              <ReadOnlyField
+                label="Account email"
+                value={
+                  session?.user.email ||
+                  "Not provided"
+                }
+              />
 
-                <Input
-                  id="contact-role"
-                  value={
-                    form.contactRole
-                  }
-                  onChange={(value) =>
-                    updateField(
-                      "contactRole",
-                      value,
-                    )
-                  }
-                  placeholder="e.g. Programme Manager"
-                />
-              </Field>
-
-              <Field>
-                <Label
-                  htmlFor="contact-email"
-                  required
-                >
-                  Email address
-                </Label>
-
-                <Input
-                  id="contact-email"
-                  value={
-                    form.contactEmail
-                  }
-                  onChange={(value) =>
-                    updateField(
-                      "contactEmail",
-                      value,
-                    )
-                  }
-                  placeholder="name@organisation.org"
-                  type="email"
-                />
-              </Field>
-
-              <Field>
-                <Label
-                  htmlFor="contact-phone"
-                  required
-                >
-                  Phone / WhatsApp
-                </Label>
-
-                <Input
-                  id="contact-phone"
-                  value={
-                    form.contactPhone
-                  }
-                  onChange={(value) =>
-                    updateField(
-                      "contactPhone",
-                      value,
-                    )
-                  }
-                  placeholder="+256 ..."
-                  type="tel"
-                />
-              </Field>
+              <ReadOnlyField
+                label="Username"
+                value={
+                  session?.user
+                    .username ||
+                  "—"
+                }
+              />
             </div>
 
             <div className="mt-5 flex items-start gap-3 border-l-2 border-gold bg-gold/5 p-4">
               <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
 
               <p className="text-xs leading-5 text-text-secondary">
-                Primary contact details
-                are for partner
-                administration and
-                should not automatically
-                be displayed publicly to
-                citizens.
+                These details belong to
+                the authenticated partner
+                account and are kept
+                separate from the
+                organisation's public
+                contact information.
               </p>
             </div>
           </FormSection>
 
-          {/* =================================================
-              LOCATION
-          ================================================= */}
+          {/* LOCATION */}
+
           <FormSection
             icon={MapPin}
             eyebrow="Section 03"
@@ -675,16 +895,16 @@ export default function PartnerProfile() {
               </p>
 
               <p className="mt-2 text-sm leading-6 text-text-secondary">
-                Select all districts
+                Select the districts
                 where your organisation
-                can realistically
-                provide support.
+                can currently provide
+                support.
               </p>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {districtOptions.map(
                   (district) => {
-                    const active =
+                    const selected =
                       form.areasServed.includes(
                         district,
                       );
@@ -701,23 +921,25 @@ export default function PartnerProfile() {
                         className={[
                           "flex min-h-12 items-center justify-between border px-4 text-left text-sm font-medium transition",
 
-                          active
+                          selected
                             ? "border-gold bg-gold/5 text-text-primary"
                             : "border-border bg-background text-text-secondary hover:border-gold/60 hover:text-text-primary",
                         ].join(" ")}
                       >
-                        {district}
+                        <span>
+                          {district}
+                        </span>
 
                         <span
                           className={[
                             "flex h-5 w-5 items-center justify-center rounded-full border",
 
-                            active
+                            selected
                               ? "border-gold bg-gold text-[#191919]"
                               : "border-border",
                           ].join(" ")}
                         >
-                          {active && (
+                          {selected && (
                             <Check className="h-3 w-3" />
                           )}
                         </span>
@@ -729,14 +951,13 @@ export default function PartnerProfile() {
             </div>
           </FormSection>
 
-          {/* =================================================
-              PUBLIC CONTACT
-          ================================================= */}
+          {/* PUBLIC INFORMATION */}
+
           <FormSection
             icon={Globe2}
             eyebrow="Section 04"
             title="Public information"
-            description="Optional details that may later be shown to citizens when your organisation is an approved referral match."
+            description="Contact information that may be used when citizens are connected to your organisation."
           >
             <div className="grid gap-5 md:grid-cols-2">
               <Field>
@@ -746,9 +967,7 @@ export default function PartnerProfile() {
 
                 <Input
                   id="website"
-                  value={
-                    form.website
-                  }
+                  value={form.website}
                   onChange={(value) =>
                     updateField(
                       "website",
@@ -807,24 +1026,23 @@ export default function PartnerProfile() {
               <Phone className="mt-0.5 h-4 w-4 shrink-0 text-gold" />
 
               <p className="text-xs leading-5 text-text-secondary">
-                Public contact
-                information should be a
-                service channel the
+                Only provide contact
+                information your
                 organisation is
-                comfortable sharing
-                with referred citizens.
+                comfortable using for
+                citizen support and
+                referrals.
               </p>
             </div>
           </FormSection>
 
-          {/* =================================================
-              VERIFICATION PREPARATION
-          ================================================= */}
+          {/* VERIFICATION */}
+
           <FormSection
             icon={FileText}
             eyebrow="Section 05"
             title="Verification preparation"
-            description="Supporting documents will eventually help Sauti Yo verify organisations before referrals are enabled."
+            description="Supporting evidence helps Sauti Yo verify organisations before referrals are enabled."
           >
             <div className="grid gap-4 md:grid-cols-2">
               <VerificationItem
@@ -840,58 +1058,63 @@ export default function PartnerProfile() {
 
             <div className="mt-5 border-l-2 border-gold bg-gold/5 p-4">
               <p className="text-sm font-semibold text-text-primary">
-                Document upload is not
-                active yet.
+                Verification is handled
+                separately.
               </p>
 
               <p className="mt-2 text-xs leading-5 text-text-secondary">
-                The interface is being
-                prepared now. Actual
-                verification documents
-                should later be uploaded
-                securely through the
-                backend rather than
-                stored in the browser.
+                Complete your profile and
+                service information
+                before submitting your
+                organisation for
+                verification.
               </p>
             </div>
           </FormSection>
 
-          {/* =================================================
-              SAVE / NEXT
-          ================================================= */}
+          {/* SAVE */}
+
           <section className="sticky bottom-0 z-20 mt-6 border border-border bg-surface/95 p-4 shadow-[var(--shadow-soft)] backdrop-blur sm:p-5">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-text-primary">
-                  {saved
-                    ? "Draft saved"
-                    : "Save your progress before continuing."}
+                  {saving
+                    ? "Saving profile..."
+                    : saved
+                      ? "Profile saved successfully"
+                      : "Save your changes before continuing."}
                 </p>
 
                 <p className="mt-1 text-xs leading-5 text-text-secondary">
-                  Saved drafts are
-                  restored when you
-                  return to this page
-                  during the current
-                  browser session.
+                  Saved changes remain
+                  available when you
+                  refresh or sign in
+                  again.
                 </p>
               </div>
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button
                   type="button"
-                  onClick={handleSave}
-                  className="btn-secondary"
+                  onClick={
+                    handleSave
+                  }
+                  disabled={saving}
+                  className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {saved ? (
+                  {saving ? (
+                    <LoaderCircle className="h-4 w-4 animate-spin" />
+                  ) : saved ? (
                     <Check className="h-4 w-4" />
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
 
-                  {saved
-                    ? "Saved"
-                    : "Save Draft"}
+                  {saving
+                    ? "Saving..."
+                    : saved
+                      ? "Saved"
+                      : "Save Profile"}
                 </button>
 
                 <Link
@@ -899,11 +1122,22 @@ export default function PartnerProfile() {
                   className="btn-primary"
                 >
                   Continue to Services
+
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>
             </div>
           </section>
+
+          {!organisation && (
+            <div className="mt-5 border border-border bg-surface p-4">
+              <p className="text-xs text-text-secondary">
+                No organisation profile
+                data is currently
+                available.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -911,7 +1145,7 @@ export default function PartnerProfile() {
 }
 
 /* =========================================================
-   FORM SECTION
+   COMPONENTS
 ========================================================= */
 
 function FormSection({
@@ -925,7 +1159,7 @@ function FormSection({
   eyebrow: string;
   title: string;
   description: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="mt-6 border border-border bg-surface">
@@ -961,14 +1195,10 @@ function FormSection({
   );
 }
 
-/* =========================================================
-   FIELD HELPERS
-========================================================= */
-
 function Field({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="space-y-2">
@@ -979,12 +1209,12 @@ function Field({
 
 function Label({
   htmlFor,
-  required,
+  required = false,
   children,
 }: {
   htmlFor: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <label
@@ -1011,7 +1241,9 @@ function Input({
 }: {
   id: string;
   value: string;
-  onChange: (value: string) => void;
+  onChange: (
+    value: string,
+  ) => void;
   placeholder?: string;
   type?: string;
 }) {
@@ -1021,7 +1253,9 @@ function Input({
       type={type}
       value={value}
       onChange={(event) =>
-        onChange(event.target.value)
+        onChange(
+          event.target.value,
+        )
       }
       placeholder={placeholder}
       className="min-h-12 w-full border border-border bg-background px-4 text-sm text-text-primary outline-none transition placeholder:text-text-secondary/60 focus:border-gold"
@@ -1032,7 +1266,7 @@ function Input({
 function HelperText({
   children,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <p className="text-xs leading-5 text-text-secondary">
@@ -1041,9 +1275,27 @@ function HelperText({
   );
 }
 
-/* =========================================================
-   VERIFICATION ITEM
-========================================================= */
+function ReadOnlyField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <p className="text-sm font-semibold text-text-primary">
+        {label}
+      </p>
+
+      <div className="mt-2 flex min-h-12 items-center border border-border bg-background px-4">
+        <p className="text-sm text-text-secondary">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function VerificationItem({
   title,
@@ -1072,10 +1324,27 @@ function VerificationItem({
           </p>
 
           <span className="mt-4 inline-flex border border-border px-3 py-1.5 text-[11px] font-semibold text-text-secondary">
-            Upload coming later
+            Verification document
           </span>
         </div>
       </div>
     </div>
   );
+}
+
+function formatRole(
+  role?: string,
+) {
+  if (!role) {
+    return "—";
+  }
+
+  return role
+    .split("_")
+    .map(
+      (part) =>
+        part.charAt(0).toUpperCase() +
+        part.slice(1),
+    )
+    .join(" ");
 }
