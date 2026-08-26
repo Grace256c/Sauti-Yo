@@ -42,13 +42,34 @@ def _compose_situation_reply(detail, mode):
     if mode == "discreet":
         return template_text
     reworded = ai_classifier.reword_reply(template_text)
-    return reworded or template_text
+    if reworded and len(reworded) <= MAX_SMS_LENGTH:
+        return reworded
+    return template_text
 
 
 def _clear_pending_safety_check(phone_number):
     SmsContext.objects.filter(
         phone_number=phone_number, pending_safety_check=True
     ).update(pending_safety_check=False)
+
+
+def _resolve_pending_safety_check(phone_number, slug, discreet):
+    """
+    Marks a pending safety check-in as resolved AND refreshes updated_at
+    (via update_or_create, not a bare queryset .update()), so the
+    follow-up window restarts from when the check-in was actually
+    answered rather than from when the question was originally sent -
+    otherwise a slow-to-reply high-risk user could have their follow-up
+    window silently eaten by however long they took to answer.
+    """
+    SmsContext.objects.update_or_create(
+        phone_number=phone_number,
+        defaults={
+            "last_situation_slug": slug,
+            "discreet": discreet,
+            "pending_safety_check": False,
+        },
+    )
 
 
 def _reply_to_situation(phone_number, slug, text):
@@ -62,7 +83,12 @@ def _reply_to_situation(phone_number, slug, text):
     is_new_topic = existing is None or existing.last_situation_slug != slug
 
     if is_new_topic and detail["risk_level"] == "high_risk":
-        _send(phone_number, templates.SAFETY_CHECKIN_QUESTION)
+        checkin_question = (
+            templates.DISCREET_SAFETY_CHECKIN_QUESTION
+            if discreet
+            else templates.SAFETY_CHECKIN_QUESTION
+        )
+        _send(phone_number, checkin_question)
         SmsContext.objects.update_or_create(
             phone_number=phone_number,
             defaults={
@@ -100,7 +126,9 @@ def handle_sms_request(phone_number, text):
         if keywords.match_not_safe_answer(text):
             detail = get_situation_detail(pending.last_situation_slug)
             _send(phone_number, templates.build_safety_reply(detail))
-            _clear_pending_safety_check(phone_number)
+            _resolve_pending_safety_check(
+                phone_number, pending.last_situation_slug, pending.discreet
+            )
             return
 
     if keywords.match_help(text):
@@ -137,12 +165,15 @@ def handle_sms_request(phone_number, text):
     pending = _live_context(phone_number)
     if pending is not None and pending.pending_safety_check:
         detail = get_situation_detail(pending.last_situation_slug)
-        _clear_pending_safety_check(phone_number)
         if detail is None:
+            _clear_pending_safety_check(phone_number)
             _send(phone_number, templates.build_unmatched_reply())
             return
         mode = "discreet" if pending.discreet else "normal"
         _send(phone_number, _compose_situation_reply(detail, mode))
+        _resolve_pending_safety_check(
+            phone_number, pending.last_situation_slug, pending.discreet
+        )
         return
 
     _send(phone_number, templates.build_unmatched_reply())

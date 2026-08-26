@@ -27,7 +27,8 @@ DISCREET_STEPS_REPLY = (
     "Steps were included in an earlier message. Text SUPPORT for help "
     "contacts."
 )
-SAFETY_CHECKIN_QUESTION = "Are you safe right now? Reply YES or NO."
+SAFETY_CHECKIN_QUESTION = "Are you safe? Reply YES or NO."
+DISCREET_SAFETY_CHECKIN_QUESTION = "Reply YES or NO to continue."
 
 
 def _situation_intro(detail, mode="normal"):

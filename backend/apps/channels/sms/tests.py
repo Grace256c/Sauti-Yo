@@ -899,3 +899,52 @@ class SafetyCheckinTests(TestCase):
         _create_problem_at_work_situation()
         handle_sms_request("+256700000000", "I was fired from my job discreet")
         mock_reword.assert_not_called()
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_discreet_new_high_risk_topic_sends_neutral_checkin_question(
+        self, mock_send
+    ):
+        handle_sms_request("+256700000000", "home discreet")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.DISCREET_SAFETY_CHECKIN_QUESTION)
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_normal_mode_reply_falls_back_to_template_when_reworded_too_long(
+        self, mock_send, mock_reword
+    ):
+        mock_reword.return_value = "x" * (handler.MAX_SMS_LENGTH + 1)
+        _create_problem_at_work_situation()
+        handle_sms_request("+256700000000", "I was fired from my job")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Identify the workplace issue", message)
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_answering_checkin_by_echoing_safe_does_not_trigger_danger_reply(
+        self, mock_send, mock_reword
+    ):
+        mock_reword.return_value = None
+        handle_sms_request("+256700000000", "my husband beats me")
+        handle_sms_request("+256700000000", "yes I am safe")
+        second_message = mock_send.call_args_list[1][0][1]
+        self.assertNotEqual(second_message, "Your safety matters. Call Sauti 116.")
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_resolving_checkin_refreshes_followup_window(self, mock_send, mock_reword):
+        mock_reword.return_value = None
+        handle_sms_request("+256700000000", "my husband beats me")
+        # Simulate the check-in question having been sent 9 minutes ago -
+        # still within the 10-minute window, but close to expiring.
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        SmsContext.objects.filter(pk=context.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=9)
+        )
+        handle_sms_request("+256700000000", "yes")
+        context.refresh_from_db()
+        # If resolving the check-in refreshed updated_at, it should now be
+        # recent (within the last few seconds), not still ~9 minutes old.
+        self.assertGreater(
+            context.updated_at, timezone.now() - timedelta(minutes=1)
+        )
