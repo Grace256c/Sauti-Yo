@@ -108,6 +108,24 @@ class MatchNotSafeAnswerTests(TestCase):
     def test_matches_danger_word(self):
         self.assertTrue(match_not_safe_answer("there's a weapon here"))
 
+    def test_matches_scared(self):
+        self.assertTrue(match_not_safe_answer("I'm scared"))
+
+    def test_matches_afraid(self):
+        self.assertTrue(match_not_safe_answer("I am afraid"))
+
+    def test_matches_help_me(self):
+        self.assertTrue(match_not_safe_answer("help me"))
+
+    def test_matches_hes_here_without_apostrophe(self):
+        self.assertTrue(match_not_safe_answer("hes here"))
+
+    def test_matches_hes_here_with_apostrophe(self):
+        self.assertTrue(match_not_safe_answer("he's here"))
+
+    def test_matches_he_is_here(self):
+        self.assertTrue(match_not_safe_answer("he is here"))
+
     def test_false_for_yes(self):
         self.assertFalse(match_not_safe_answer("yes"))
 

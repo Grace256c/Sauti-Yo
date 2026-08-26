@@ -56,7 +56,18 @@ def match_discreet(text):
     return "discreet" in normalized
 
 
-NOT_SAFE_ANSWER_PHRASES = ["not safe", "unsafe", "not okay", "not ok"]
+NOT_SAFE_ANSWER_PHRASES = [
+    "not safe",
+    "unsafe",
+    "not okay",
+    "not ok",
+    "scared",
+    "afraid",
+    "help me",
+    "hes here",
+    "he's here",
+    "he is here",
+]
 
 
 def match_not_safe_answer(text):
