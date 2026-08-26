@@ -23,6 +23,10 @@ NO_ACTION_STEPS_REPLY = (
     "contacts."
 )
 DISCREET_INTRO = "Here is some information about your recent inquiry:"
+DISCREET_STEPS_REPLY = (
+    "Steps were included in an earlier message. Text SUPPORT for help "
+    "contacts."
+)
 
 
 def _situation_intro(detail, mode="normal"):
@@ -66,7 +70,7 @@ def build_situation_reply(detail, mode="normal"):
     return " ".join(parts)
 
 
-def build_support_reply(detail=None):
+def build_support_reply(detail=None, mode="normal"):
     """
     Builds a support-contacts reply. If `detail` (from get_situation_detail)
     is given, uses that situation's linked support services; otherwise
@@ -85,11 +89,14 @@ def build_support_reply(detail=None):
             .values("name", "phone_number")
         )
 
-    lines = [
-        f"{s['name']}: {s['phone_number']}"
-        for s in services
-        if s.get("phone_number")
-    ]
+    if mode == "discreet":
+        lines = [s["phone_number"] for s in services if s.get("phone_number")]
+    else:
+        lines = [
+            f"{s['name']}: {s['phone_number']}"
+            for s in services
+            if s.get("phone_number")
+        ]
     return "\n".join(lines) if lines else NO_SUPPORT_SERVICES_REPLY
 
 
@@ -101,7 +108,9 @@ def build_safety_reply(detail=None, trigger_key="immediate_danger"):
     return GENERAL_SAFETY_REPLY
 
 
-def build_steps_reply(detail):
+def build_steps_reply(detail, mode="normal"):
+    if mode == "discreet":
+        return DISCREET_STEPS_REPLY
     steps = []
     for topic in detail["rights_topics"]:
         steps.extend(topic["action_steps"])

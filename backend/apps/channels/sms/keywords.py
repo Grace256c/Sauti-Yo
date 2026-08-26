@@ -6,8 +6,12 @@ DANGER_WORDS = [
 
 SITUATION_KEYWORDS = {
     "home-safety": ["home", "abuse", "husband", "wife", "beat", "unsafe"],
-    "work": ["work", "job", "salary", "fired", "boss"],
-    "land": ["land", "plot", "evict", "property"],
+    "problem-at-work": ["work", "job", "salary", "fired", "boss"],
+    "land-property": ["land", "plot", "evict", "property"],
+    # No Situation exists yet under any slug for "child" in this codebase.
+    # Kept as a placeholder key so the keyword still matches; the None-guard
+    # in handler.py makes this safe until a real situation is seeded — at
+    # that point, update this key to the real slug.
     "child": ["child", "school", "minor", "kid"],
 }
 

@@ -1,12 +1,14 @@
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.test import TestCase
 from django.utils import timezone
 
 from apps.channels import africastalking_client
 from apps.channels.models import SmsContext
+from apps.channels.sms import handler
 from apps.channels.sms.handler import handle_sms_request
 from apps.channels.sms.keywords import (
     match_danger,
@@ -78,17 +80,26 @@ class SmsContextModelTests(TestCase):
                 phone_number="+256700000000", last_situation_slug="work"
             )
 
+    def test_discreet_defaults_to_false(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        self.assertFalse(context.discreet)
+
 
 class KeywordMatchingTests(TestCase):
     def test_match_situation_home_safety(self):
         self.assertEqual(match_situation("My husband beats me"), "home-safety")
 
     def test_match_situation_work(self):
-        self.assertEqual(match_situation("I was fired from my job"), "work")
+        self.assertEqual(
+            match_situation("I was fired from my job"), "problem-at-work"
+        )
 
     def test_match_situation_land(self):
         self.assertEqual(
-            match_situation("someone wants to evict me from my land"), "land"
+            match_situation("someone wants to evict me from my land"),
+            "land-property",
         )
 
     def test_match_situation_child(self):
@@ -178,6 +189,38 @@ def _create_land_situation_without_safety_response():
     return situation
 
 
+def _create_problem_at_work_situation():
+    situation = Situation.objects.create(
+        slug="problem-at-work",
+        title="I have a problem at work",
+        description=(
+            "Understand your rights and explore practical next steps "
+            "for a workplace problem."
+        ),
+        risk_level="standard",
+    )
+    topic = RightsTopic.objects.create(
+        slug="workplace-rights",
+        title="Understanding your workplace rights",
+        summary=(
+            "Sauti Yo can help you understand the issue, review "
+            "relevant rights information, and identify possible next "
+            "steps."
+        ),
+    )
+    SituationRightsTopic.objects.create(situation=situation, rights_topic=topic)
+    ActionStep.objects.create(
+        rights_topic=topic,
+        order=1,
+        title="Understand what happened",
+        description=(
+            "Identify the workplace issue and keep a clear record of "
+            "important details."
+        ),
+    )
+    return situation
+
+
 class BuildSituationReplyTests(TestCase):
     def setUp(self):
         _create_home_safety_situation()
@@ -235,6 +278,11 @@ class BuildSupportReplyTests(TestCase):
         reply = templates.build_support_reply(None)
         self.assertIn("0800199195", reply)
 
+    def test_discreet_mode_omits_service_names(self):
+        reply = templates.build_support_reply(self.detail, mode="discreet")
+        self.assertNotIn("Sauti 116 - Child & GBV Helpline", reply)
+        self.assertIn("116", reply)
+
 
 class BuildSafetyReplyTests(TestCase):
     def setUp(self):
@@ -271,6 +319,10 @@ class BuildStepsReplyTests(TestCase):
         reply = templates.build_steps_reply(detail)
         self.assertEqual(reply, templates.NO_ACTION_STEPS_REPLY)
 
+    def test_discreet_mode_returns_neutral_reply(self):
+        reply = templates.build_steps_reply(self.detail, mode="discreet")
+        self.assertEqual(reply, templates.DISCREET_STEPS_REPLY)
+
 
 class FixedReplyTests(TestCase):
     def test_build_unmatched_reply(self):
@@ -283,6 +335,7 @@ class FixedReplyTests(TestCase):
 class HandleSmsRequestTests(TestCase):
     def setUp(self):
         _create_home_safety_situation()
+        cache.clear()
 
     @patch("apps.channels.sms.handler.send_sms")
     def test_situation_keyword_sends_normal_reply(self, mock_send):
@@ -372,6 +425,77 @@ class HandleSmsRequestTests(TestCase):
         handle_sms_request("+256700000000", "hello there")
         message = mock_send.call_args[0][1]
         self.assertEqual(message, templates.build_unmatched_reply())
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_work_keyword_resolves_to_real_situation(self, mock_send):
+        _create_problem_at_work_situation()
+        handle_sms_request("+256700000000", "I was fired from my job")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Identify the workplace issue", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_land_keyword_resolves_to_real_situation(self, mock_send):
+        _create_land_situation_without_safety_response()
+        handle_sms_request("+256700000000", "they want to evict me from my land")
+        mock_send.assert_called_once()
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.build_unmatched_reply())
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_unseeded_situation_keyword_sends_unmatched_reply_not_crash(
+        self, mock_send
+    ):
+        handle_sms_request("+256700000000", "my child is unsafe at school")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.build_unmatched_reply())
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_discreet_context_persists_to_support_followup(self, mock_send):
+        handle_sms_request("+256700000000", "home discreet")
+        handle_sms_request("+256700000000", "SUPPORT")
+        message = mock_send.call_args[0][1]
+        self.assertNotIn("Sauti 116 - Child & GBV Helpline", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_discreet_context_persists_to_steps_followup(self, mock_send):
+        handle_sms_request("+256700000000", "home discreet")
+        handle_sms_request("+256700000000", "STEPS")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.DISCREET_STEPS_REPLY)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_long_reply_is_truncated_to_max_length(self, mock_send):
+        situation = Situation.objects.create(
+            slug="problem-at-work",
+            title="I have a problem at work",
+            risk_level="standard",
+        )
+        topic = RightsTopic.objects.create(
+            slug="workplace-rights",
+            title="Understanding your workplace rights",
+            summary="summary",
+        )
+        SituationRightsTopic.objects.create(situation=situation, rights_topic=topic)
+        for i in range(10):
+            ActionStep.objects.create(
+                rights_topic=topic,
+                order=i,
+                title=f"Step {i}",
+                description="A" * 50,
+            )
+        handle_sms_request("+256700000000", "I was fired from my job")
+        handle_sms_request("+256700000000", "STEPS")
+        message = mock_send.call_args[0][1]
+        self.assertLessEqual(len(message), handler.MAX_SMS_LENGTH)
+        self.assertTrue(message.endswith("..."))
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_rate_limit_blocks_excess_messages_from_same_number(self, mock_send):
+        for _ in range(5):
+            handle_sms_request("+256700000000", "hello")
+        mock_send.reset_mock()
+        handle_sms_request("+256700000000", "hello")
+        mock_send.assert_not_called()
 
 
 class SmsCallbackViewTests(TestCase):
