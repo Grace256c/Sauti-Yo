@@ -996,13 +996,13 @@ class UnreviewedNoticeTests(TestCase):
         text = menus._prepend_unreviewed_notice(
             "Some text.", "review_required", "en"
         )
-        self.assertTrue(text.startswith("Note: not yet reviewed.\n\n"))
+        self.assertTrue(text.startswith("Note: not yet reviewed. "))
         self.assertIn("Some text.", text)
 
     def test_prepend_notice_adds_notice_for_expired_and_archived(self):
         for status in ("expired", "archived"):
             text = menus._prepend_unreviewed_notice("Some text.", status, "en")
-            self.assertTrue(text.startswith("Note: not yet reviewed.\n\n"))
+            self.assertTrue(text.startswith("Note: not yet reviewed. "))
 
     def test_prepend_notice_on_empty_text_returns_just_the_notice(self):
         text = menus._prepend_unreviewed_notice("", "review_required", "en")
@@ -1090,7 +1090,7 @@ class UnreviewedNoticeTests(TestCase):
         self.assertIn("Note: not yet reviewed.", text)
         self.assertFalse(ended)
 
-    def test_render_safety_gate_long_message_puts_notice_in_its_own_first_chunk(self):
+    def test_render_safety_gate_long_message_shares_first_chunk_with_notice(self):
         topic = RightsTopic.objects.create(
             slug="long-unreviewed-safety-topic",
             title="Long Unreviewed Safety Topic",
@@ -1113,18 +1113,21 @@ class UnreviewedNoticeTests(TestCase):
             },
         )
         text, ended = menus.render_safety_gate(session)
-        # With a long safety message, the notice doesn't fit on the same
-        # screen as the start of the message - each paragraph is wrapped
-        # independently near the full budget, so the notice takes its own
-        # first chunk and the real message starts on chunk 1. This is
-        # expected, verified behavior (see Global Constraints).
+        # The notice and the safety message are now joined with a single
+        # space rather than a blank-line paragraph break, so they flow
+        # through word-wrapping as one continuous text stream. Even for
+        # this very long (380-char) message, the notice and the start of
+        # the real message share the first chunk.
         self.assertIn("Note: not yet reviewed.", text)
-        self.assertNotIn("Call the emergency line", text)
+        self.assertIn("Call the emergency line", text)
         self.assertLessEqual(len(text), 182)
+        self.assertFalse(ended)
 
+        # The message is long enough that it still spans multiple chunks.
         session.context["chunk_index"] = 1
         text_chunk_1, _ = menus.render_safety_gate(session)
         self.assertIn("Call the emergency line", text_chunk_1)
+        self.assertNotIn("Note: not yet reviewed.", text_chunk_1)
 
     def test_transition_safety_gate_stays_in_sync_with_render_for_review_required_topic(self):
         topic = RightsTopic.objects.create(
@@ -1151,3 +1154,52 @@ class UnreviewedNoticeTests(TestCase):
         next_state, context = menus.transition_safety_gate(session, "1")
         self.assertEqual(next_state, "safety_gate")
         self.assertEqual(context["chunk_index"], 1)
+
+    def test_render_topic_detail_shares_first_chunk_with_realistic_length_summary(self):
+        RightsTopic.objects.create(
+            slug="realistic-length-topic",
+            title="Realistic Length Topic",
+            summary=(
+                "Sauti Yo can help you understand the issue, review "
+                "relevant rights information, and identify possible "
+                "next steps."
+            ),
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "realistic-length-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_topic_detail(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Sauti Yo can help you understand the issue", text)
+
+    def test_render_safety_gate_shows_notice_and_fallback_summary_together_when_no_safety_response(self):
+        RightsTopic.objects.create(
+            slug="no-response-realistic-topic",
+            title="No Response Realistic Topic",
+            summary=(
+                "Sauti Yo can help you understand the issue, review "
+                "relevant rights information, and identify possible "
+                "next steps."
+            ),
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "no-response-realistic-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_safety_gate(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Sauti Yo can help you understand the issue", text)

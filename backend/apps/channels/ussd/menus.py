@@ -408,7 +408,7 @@ def _prepend_unreviewed_notice(text, verification_status, language):
     if verification_status == "verified":
         return text
     notice = get_copy("ussd.unreviewed_notice", language)
-    return f"{notice}\n\n{text}" if text else notice
+    return f"{notice} {text}" if text else notice
 
 
 def render_topic_detail(session):
