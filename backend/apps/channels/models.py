@@ -39,6 +39,7 @@ class SmsContext(models.Model):
     phone_number = models.CharField(max_length=50, unique=True)
     last_situation_slug = models.SlugField()
     discreet = models.BooleanField(default=False)
+    pending_safety_check = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

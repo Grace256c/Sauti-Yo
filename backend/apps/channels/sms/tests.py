@@ -15,6 +15,7 @@ from apps.channels.sms.keywords import (
     match_discreet,
     match_followup,
     match_help,
+    match_not_safe_answer,
     match_situation,
 )
 from apps.rights.models import (
@@ -86,6 +87,38 @@ class SmsContextModelTests(TestCase):
             phone_number="+256700000000", last_situation_slug="home-safety"
         )
         self.assertFalse(context.discreet)
+
+    def test_pending_safety_check_defaults_to_false(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="home-safety"
+        )
+        self.assertFalse(context.pending_safety_check)
+
+
+class MatchNotSafeAnswerTests(TestCase):
+    def test_matches_no(self):
+        self.assertTrue(match_not_safe_answer("no"))
+
+    def test_matches_unsafe(self):
+        self.assertTrue(match_not_safe_answer("unsafe"))
+
+    def test_matches_not_safe_phrase(self):
+        self.assertTrue(match_not_safe_answer("not safe"))
+
+    def test_matches_danger_word(self):
+        self.assertTrue(match_not_safe_answer("there's a weapon here"))
+
+    def test_false_for_yes(self):
+        self.assertFalse(match_not_safe_answer("yes"))
+
+    def test_false_for_okay(self):
+        self.assertFalse(match_not_safe_answer("I'm okay"))
+
+    def test_does_not_false_positive_on_know(self):
+        self.assertFalse(match_not_safe_answer("I don't know what to do"))
+
+    def test_does_not_false_positive_on_info(self):
+        self.assertFalse(match_not_safe_answer("send me more info please"))
 
 
 class KeywordMatchingTests(TestCase):
