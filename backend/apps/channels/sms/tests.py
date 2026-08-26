@@ -332,6 +332,7 @@ class FixedReplyTests(TestCase):
         self.assertIn("STEPS", templates.build_followup_expired_reply())
 
 
+@override_settings(LLM_API_KEY="")
 class HandleSmsRequestTests(TestCase):
     def setUp(self):
         _create_home_safety_situation()
@@ -612,11 +613,40 @@ class ClassifySituationTests(TestCase):
         self.mock_client.with_options.return_value.messages.create.side_effect = (
             RuntimeError("boom")
         )
-        result = ai_classifier.classify_situation("anything")
+        with self.assertLogs(
+            "apps.channels.sms.ai_classifier", level="WARNING"
+        ) as captured:
+            result = ai_classifier.classify_situation("anything")
         self.assertIsNone(result)
+        self.assertTrue(
+            any("classification failed" in msg.lower() for msg in captured.output)
+        )
 
     @override_settings(LLM_API_KEY="")
     def test_returns_none_and_skips_call_when_api_key_unset(self):
         result = ai_classifier.classify_situation("anything")
         self.assertIsNone(result)
         self.mock_client.with_options.assert_not_called()
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_and_skips_call_for_empty_text(self):
+        result = ai_classifier.classify_situation("   ")
+        self.assertIsNone(result)
+        self.mock_client.with_options.assert_not_called()
+
+    @patch("apps.channels.sms.ai_classifier.anthropic")
+    @override_settings(LLM_API_KEY="test-key")
+    def test_client_constructed_with_no_retries_and_short_timeout(
+        self, mock_anthropic_module
+    ):
+        ai_classifier._client = None
+        mock_anthropic_module.Anthropic.return_value.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("NONE")
+        )
+        ai_classifier.classify_situation("anything")
+        mock_anthropic_module.Anthropic.assert_called_once_with(
+            api_key="test-key", max_retries=0
+        )
+        mock_anthropic_module.Anthropic.return_value.with_options.assert_called_once_with(
+            timeout=5.0
+        )
