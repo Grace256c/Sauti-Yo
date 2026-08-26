@@ -14,7 +14,7 @@ from apps.support.models import SupportService
 class Command(BaseCommand):
     help = (
         "Seed Sauti Yo with pilot rights content (workplace, housing, "
-        "domestic violence, sexual harassment). Idempotent — safe to re-run."
+        "domestic violence, sexual harassment). Idempotent - safe to re-run."
     )
 
     @transaction.atomic
@@ -28,6 +28,13 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS("Sauti Yo pilot content seeded successfully.")
+        )
+        self.stdout.write(
+            self.style.WARNING(
+                "All seeded content has verification_status='review_required' "
+                "and has NOT been reviewed by a human with legal/NGO authority. "
+                "Do not treat this as verified before a real review happens."
+            )
         )
 
     def _support_service(self, **kwargs):
@@ -108,7 +115,7 @@ class Command(BaseCommand):
                 (
                     2,
                     "Understand the relevant right",
-                    "Review verified information that may apply to "
+                    "Review information that may apply to "
                     "your situation.",
                     False,
                 ),
@@ -123,7 +130,7 @@ class Command(BaseCommand):
                     4,
                     "Choose a practical next step",
                     "Consider an appropriate next action or connect "
-                    "with a verified support service.",
+                    "with a support service.",
                     False,
                 ),
             ],
@@ -213,7 +220,7 @@ class Command(BaseCommand):
                     3,
                     "Keep your records",
                     "Keep your tenancy agreement and proof of rent "
-                    "payments — these matter if you need to show an "
+                    "payments - these matter if you need to show an "
                     "eviction was unlawful.",
                     False,
                 ),
@@ -294,7 +301,7 @@ class Command(BaseCommand):
                     "place if you can and call the Uganda Police GBV "
                     "Helpline on 0800 199 195 (toll-free) or go to the "
                     "nearest police station now. This is not a "
-                    "substitute for emergency help — it's here so you "
+                    "substitute for emergency help - it's here so you "
                     "know your rights once you're safe: Ugandan law "
                     "lets you apply for a protection order against an "
                     "abuser, and a court can order them to leave your "
@@ -325,7 +332,7 @@ class Command(BaseCommand):
                     3,
                     "Ask about a protection order",
                     "You or someone on your behalf can apply to a "
-                    "magistrate's court for a protection order — this "
+                    "magistrate's court for a protection order - this "
                     "can be done without your abuser present.",
                     False,
                 ),
@@ -404,11 +411,15 @@ class Command(BaseCommand):
                 ),
                 "risk_level": "sensitive",
                 "source_name": (
-                    "Employment Act, 2006, s.7(1) and Employment "
-                    "(Sexual Harassment) Regulations, 2012"
+                    "Employment Act, 2006, s.7(1). Also see Employment "
+                    "(Sexual Harassment) Regulations, 2012 (S.I. 15 of "
+                    "2012), https://ulii.org/en/akn/ug/act/si/2012/15/"
+                    "eng@2012-04-20/source (regulations URL not "
+                    "independently verified)"
                 ),
                 "source_url": (
-                    "https://ulii.org/akn/ug/act/2006/6/eng@2023-12-31/source"
+                    "https://ulii.org/en/akn/ug/act/2006/6/"
+                    "eng@2023-12-31/source"
                 ),
                 "reviewed_by": "",
                 "verification_status": "review_required",
@@ -429,7 +440,7 @@ class Command(BaseCommand):
                     "This section covers sexual harassment, which can "
                     "be difficult to read about. Confidential help is "
                     "available if you'd rather talk to someone first "
-                    "— FIDA-Uganda (0800 111 511) offers free, "
+                    "- FIDA-Uganda (0800 111 511) offers free, "
                     "confidential legal support."
                 ),
                 "is_active": True,
@@ -450,7 +461,7 @@ class Command(BaseCommand):
                     2,
                     "Report it internally first, if safe to do so",
                     "Workplaces with 25+ staff are legally required to "
-                    "have a sexual harassment policy and committee — "
+                    "have a sexual harassment policy and committee - "
                     "you can report to them or your supervisor.",
                     False,
                 ),
