@@ -756,3 +756,25 @@ class HandleUssdRequestTests(TestCase):
         session.refresh_from_db()
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertTrue(session.is_active)
+
+
+from django.urls import reverse
+
+
+class UssdCallbackViewTests(TestCase):
+    def test_post_returns_plain_text_response(self):
+        response = self.client.post(
+            reverse("ussd-callback"),
+            data={
+                "sessionId": "view-sess-1",
+                "phoneNumber": "+256700000000",
+                "text": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/plain")
+        self.assertTrue(response.content.decode().startswith("CON "))
+
+    def test_get_not_allowed(self):
+        response = self.client.get(reverse("ussd-callback"))
+        self.assertEqual(response.status_code, 405)
