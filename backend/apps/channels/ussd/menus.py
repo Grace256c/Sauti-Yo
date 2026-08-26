@@ -77,3 +77,36 @@ def paginate_items(items, page, page_size=PAGE_SIZE):
     page_items = items[start:end]
     has_more = end < len(items)
     return page_items, has_more
+
+
+def render_language_select(session):
+    body = get_copy("ussd.welcome", session.language)
+    prompt = get_copy("ussd.language_prompt", session.language)
+    return f"{body}\n{prompt}", False
+
+
+def transition_language_select(session, user_input):
+    mapping = {"1": "en", "2": "lg", "3": "sw", "4": "nyn"}
+    language = mapping.get(user_input)
+    if language is None:
+        return None
+    session.language = language
+    return "main_menu", {}
+
+
+def render_main_menu(session):
+    return get_copy("ussd.main_menu", session.language), False
+
+
+def transition_main_menu(session, user_input):
+    if user_input == "1":
+        return "situation_list", {"page": 0}
+    if user_input == "2":
+        return "emergency_list", {"chunk_index": 0}
+    if user_input == "0":
+        return "goodbye", {}
+    return None
+
+
+def render_goodbye(session):
+    return get_copy("ussd.goodbye", session.language), True

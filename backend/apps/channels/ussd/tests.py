@@ -127,3 +127,61 @@ class GetCopyTests(TestCase):
         )
         text = menus.get_copy("ussd.main_menu", "en")
         self.assertEqual(text, menus.DEFAULT_COPY["ussd.main_menu"])
+
+
+class LanguageSelectTests(TestCase):
+    def test_render_shows_welcome_and_language_options(self):
+        session = UssdSession(state="language_select", language="", context={})
+        text, ended = menus.render_language_select(session)
+        self.assertIn("Welcome to Sauti Yo", text)
+        self.assertIn("1. English", text)
+        self.assertFalse(ended)
+
+    def test_transition_sets_language_and_moves_to_main_menu(self):
+        session = UssdSession(state="language_select", language="", context={})
+        next_state, context = menus.transition_language_select(session, "2")
+        self.assertEqual(next_state, "main_menu")
+        self.assertEqual(session.language, "lg")
+        self.assertEqual(context, {})
+
+    def test_transition_rejects_invalid_choice(self):
+        session = UssdSession(state="language_select", language="", context={})
+        result = menus.transition_language_select(session, "9")
+        self.assertIsNone(result)
+
+
+class MainMenuTests(TestCase):
+    def test_render_shows_menu_options(self):
+        session = UssdSession(state="main_menu", language="en", context={})
+        text, ended = menus.render_main_menu(session)
+        self.assertIn("1. Find my rights", text)
+        self.assertFalse(ended)
+
+    def test_transition_to_situation_list(self):
+        session = UssdSession(state="main_menu", language="en", context={})
+        next_state, context = menus.transition_main_menu(session, "1")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
+    def test_transition_to_emergency_list(self):
+        session = UssdSession(state="main_menu", language="en", context={})
+        next_state, context = menus.transition_main_menu(session, "2")
+        self.assertEqual(next_state, "emergency_list")
+        self.assertEqual(context, {"chunk_index": 0})
+
+    def test_transition_exit_goes_to_goodbye(self):
+        session = UssdSession(state="main_menu", language="en", context={})
+        next_state, context = menus.transition_main_menu(session, "0")
+        self.assertEqual(next_state, "goodbye")
+
+    def test_transition_rejects_invalid_choice(self):
+        session = UssdSession(state="main_menu", language="en", context={})
+        self.assertIsNone(menus.transition_main_menu(session, "9"))
+
+
+class GoodbyeTests(TestCase):
+    def test_render_ends_session(self):
+        session = UssdSession(state="goodbye", language="en", context={})
+        text, ended = menus.render_goodbye(session)
+        self.assertIn("Thank you", text)
+        self.assertTrue(ended)
