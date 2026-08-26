@@ -30,6 +30,12 @@ class Situation(models.Model):
 
 
 class RightsTopic(models.Model):
+    RISK_LEVEL_CHOICES = [
+        ("standard", "Standard"),
+        ("sensitive", "Sensitive"),
+        ("high_risk", "High Risk"),
+    ]
+
     VERIFICATION_STATUS_CHOICES = [
         ("verified", "Verified"),
         ("review_required", "Review Required"),
@@ -39,6 +45,12 @@ class RightsTopic(models.Model):
 
     slug = models.SlugField(unique=True)
     title = models.CharField(max_length=150)
+
+    risk_level = models.CharField(
+        max_length=20,
+        choices=RISK_LEVEL_CHOICES,
+        default="standard",
+    )
 
     summary = models.TextField()
 

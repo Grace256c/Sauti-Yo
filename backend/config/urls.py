@@ -13,29 +13,40 @@ urlpatterns = [
         "admin/",
         admin.site.urls,
     ),
+
     path(
         "api/auth/",
         include("apps.core.urls"),
     ),
+
     path(
         "api/rights/",
         include("apps.rights.urls"),
     ),
+
     path(
         "api/support/",
         include("apps.support.urls"),
     ),
+
     path(
         "api/content/",
         include("apps.content.urls"),
     ),
+
     path(
         "api/partners/",
         include("apps.partners.urls"),
     ),
+
     path(
         "api/referrals/",
         include("apps.referrals.urls"),
+    ),
+
+    path(
+        "api/channels/",
+        include("apps.channels.urls"),
     ),
 ]
 
