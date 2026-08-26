@@ -38,6 +38,11 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Africa's Talking
+AFRICASTALKING_USERNAME = os.getenv("AFRICASTALKING_USERNAME") or "sandbox"
+AFRICASTALKING_API_KEY = os.getenv("AFRICASTALKING_API_KEY", "")
+AFRICASTALKING_SMS_SENDER_ID = os.getenv("AFRICASTALKING_SMS_SENDER_ID", "")
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -191,6 +196,20 @@ LANGUAGES = [
 LOCALE_PATHS = [
     BASE_DIR / "locale",
 ]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
 
 # User-uploaded files
 MEDIA_URL = "/media/"
