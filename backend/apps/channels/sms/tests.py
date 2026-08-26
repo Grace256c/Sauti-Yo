@@ -57,3 +57,60 @@ class SmsContextModelTests(TestCase):
             SmsContext.objects.create(
                 phone_number="+256700000000", last_situation_slug="work"
             )
+
+
+from apps.channels.sms.keywords import (
+    match_danger,
+    match_discreet,
+    match_followup,
+    match_help,
+    match_situation,
+)
+
+
+class KeywordMatchingTests(TestCase):
+    def test_match_situation_home_safety(self):
+        self.assertEqual(match_situation("My husband beats me"), "home-safety")
+
+    def test_match_situation_work(self):
+        self.assertEqual(match_situation("I was fired from my job"), "work")
+
+    def test_match_situation_land(self):
+        self.assertEqual(
+            match_situation("someone wants to evict me from my land"), "land"
+        )
+
+    def test_match_situation_child(self):
+        self.assertEqual(
+            match_situation("my child is unsafe at school"), "child"
+        )
+
+    def test_match_situation_returns_none_for_unmatched_text(self):
+        self.assertIsNone(match_situation("hello there"))
+
+    def test_match_danger_detects_danger_word(self):
+        self.assertTrue(match_danger("he has a weapon right now"))
+
+    def test_match_danger_false_for_safe_text(self):
+        self.assertFalse(match_danger("I have a problem at work"))
+
+    def test_match_followup_steps(self):
+        self.assertEqual(match_followup("what are the steps"), "steps")
+
+    def test_match_followup_support(self):
+        self.assertEqual(match_followup("SUPPORT"), "support")
+
+    def test_match_followup_returns_none(self):
+        self.assertIsNone(match_followup("hello"))
+
+    def test_match_help_matches_standalone_word(self):
+        self.assertTrue(match_help("HELP"))
+
+    def test_match_help_false_for_unrelated_text(self):
+        self.assertFalse(match_help("helpful tips"))
+
+    def test_match_discreet_detects_keyword(self):
+        self.assertTrue(match_discreet("HOME DISCREET"))
+
+    def test_match_discreet_false_by_default(self):
+        self.assertFalse(match_discreet("HOME"))
