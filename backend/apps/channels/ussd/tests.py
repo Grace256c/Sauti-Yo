@@ -352,3 +352,25 @@ class SituationDetailTests(TestCase):
         next_state, context = menus.transition_situation_detail(session, "0")
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
+
+    def test_transition_selects_high_risk_topic_routes_to_safety_gate(self):
+        from apps.rights.models import SafetyResponse
+
+        self.topic_a.risk_level = "high_risk"
+        self.topic_a.save()
+        SafetyResponse.objects.create(
+            rights_topic=self.topic_a,
+            trigger_key="default",
+            message="Call the emergency line immediately.",
+            is_active=True,
+        )
+
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 9999},
+        )
+        next_state, context = menus.transition_situation_detail(session, "1")
+
+        self.assertEqual(next_state, "safety_gate")
+        self.assertEqual(context["topic_slug"], "topic-a")
