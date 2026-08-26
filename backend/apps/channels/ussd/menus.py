@@ -132,7 +132,7 @@ def _enter_topic(situation_slug, topic):
         "topic_slug": topic.slug,
         "chunk_index": 0,
     }
-    if getattr(topic, "risk_level", "standard") in ("sensitive", "high_risk"):
+    if topic.risk_level in ("sensitive", "high_risk"):
         safety = topic.safety_responses.filter(
             trigger_key="default", is_active=True
         ).first()
