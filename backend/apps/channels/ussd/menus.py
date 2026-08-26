@@ -120,7 +120,8 @@ def render_language_select(session):
     body = get_copy("ussd.welcome", session.language)
     prompt = get_copy("ussd.language_prompt", session.language)
     if session.context.get("unavailable_notice"):
-        notice = get_copy("ussd.language_unavailable", session.language)
+        requested = session.context.get("requested_language", session.language)
+        notice = get_copy("ussd.language_unavailable", requested)
         return f"{notice}\n\n{body}\n{prompt}", False
     return f"{body}\n{prompt}", False
 
@@ -131,7 +132,10 @@ def transition_language_select(session, user_input):
     if language is None:
         return None
     if language != "en":
-        return "language_select", {"unavailable_notice": True}
+        return "language_select", {
+            "unavailable_notice": True,
+            "requested_language": language,
+        }
     session.language = language
     return "main_menu", {}
 
