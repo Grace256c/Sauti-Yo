@@ -38,6 +38,11 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Africa's Talking
+AFRICASTALKING_USERNAME = os.getenv("AFRICASTALKING_USERNAME", "sandbox")
+AFRICASTALKING_API_KEY = os.getenv("AFRICASTALKING_API_KEY", "")
+AFRICASTALKING_SMS_SENDER_ID = os.getenv("AFRICASTALKING_SMS_SENDER_ID", "")
+
 # Application definition
 
 INSTALLED_APPS = [
