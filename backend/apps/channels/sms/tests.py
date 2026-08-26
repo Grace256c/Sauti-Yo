@@ -372,3 +372,32 @@ class HandleSmsRequestTests(TestCase):
         handle_sms_request("+256700000000", "hello there")
         message = mock_send.call_args[0][1]
         self.assertEqual(message, templates.build_unmatched_reply())
+
+
+class SmsCallbackViewTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_valid_request_returns_200(self, mock_send):
+        response = self.client.post(
+            "/api/channels/sms/",
+            {"from": "+256700000000", "text": "home"},
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_send.assert_called_once()
+
+    def test_get_request_not_allowed(self):
+        response = self.client.get("/api/channels/sms/")
+        self.assertEqual(response.status_code, 405)
+
+    @patch(
+        "apps.channels.sms.views.handle_sms_request",
+        side_effect=RuntimeError("boom"),
+    )
+    def test_unhandled_error_still_returns_200(self, mock_handle):
+        response = self.client.post(
+            "/api/channels/sms/",
+            {"from": "+256700000000", "text": "home"},
+        )
+        self.assertEqual(response.status_code, 200)
