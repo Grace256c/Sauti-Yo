@@ -18,6 +18,7 @@
 - Rights content (`Situation.description`, `RightsTopic.summary`, `ActionStep.description`, `SafetyResponse.message`) is served in English regardless of the selected language — only USSD chrome (menu labels, prompts) is looked up per-language via `ChannelContent(channel="ussd")`, falling back to hardcoded English `DEFAULT_COPY` when no row exists. See spec section "Language handling".
 - Spec: `docs/superpowers/specs/2026-08-25-ussd-channel-handler-design.md` — this plan implements that spec in full; consult it for the "why" behind any decision below.
 - **Amendment (found during Task 5 implementation):** the plan originally assumed `RightsTopic` already had a `risk_level` field (it doesn't — only `Situation` does). Task 5 adds `risk_level` to `RightsTopic` (`apps/rights/models.py`, choices `standard`/`sensitive`/`high_risk`, default `"standard"`, matching `Situation.RISK_LEVEL_CHOICES`) plus its migration, so that `_enter_topic()`'s `topic.risk_level` check (Task 5) and the safety-gate tests (Task 6) work as originally written. This is the only place this plan modifies a model outside `apps.channels`.
+- **Amendment (found during Task 6 review):** `_chunked_screen(text, chunk_index, trailing_options, language)` returns `(screen_text, is_last)`, where `is_last` means "this is the final chunk of body text, so show `trailing_options` instead of More/Back" — it does **not** mean "the USSD session should terminate." Every screen using it (`situation_detail`, `topic_detail`, `safety_gate`, `support_contacts`, `emergency_list`) must discard that second value and hardcode `ended=False`, e.g. `screen, _ = _chunked_screen(...); return screen, False`, never `return _chunked_screen(...)` directly — otherwise the very act of reaching the last chunk of a topic's summary or the safety warning (which happens on the *first* render whenever the text is short enough to fit one screen — the common case) would send Africa's Talking an `END`-prefixed response while a "1. Continue"/"1. Action steps" menu is still showing, killing the session before the user can respond. Only `render_goodbye` should ever return `ended=True`. Every `render_*` function's tests must include a last-chunk (or single-chunk) assertion that `ended is False`, not just a non-last-chunk case.
 
 ---
 
@@ -857,7 +858,8 @@ def render_situation_detail(session):
         trailing = f"0. {back}"
 
     text = situation.description or situation.title
-    return _chunked_screen(text, chunk_index, trailing, session.language)
+    screen, _ = _chunked_screen(text, chunk_index, trailing, session.language)
+    return screen, False
 
 
 def transition_situation_detail(session, user_input):
@@ -1135,7 +1137,8 @@ def render_topic_detail(session):
     chunk_index = session.context.get("chunk_index", 0)
     menu = get_copy("ussd.topic_menu", session.language)
     text = topic.summary or topic.title
-    return _chunked_screen(text, chunk_index, menu, session.language)
+    screen, _ = _chunked_screen(text, chunk_index, menu, session.language)
+    return screen, False
 
 
 def transition_topic_detail(session, user_input):
@@ -1196,7 +1199,8 @@ def render_safety_gate(session):
     message = safety.message if safety else topic.summary or topic.title
     chunk_index = session.context.get("chunk_index", 0)
     options = get_copy("ussd.safety_continue", session.language)
-    return _chunked_screen(message, chunk_index, options, session.language)
+    screen, _ = _chunked_screen(message, chunk_index, options, session.language)
+    return screen, False
 
 
 def transition_safety_gate(session, user_input):
@@ -1453,9 +1457,10 @@ def render_support_contacts(session):
         body = get_copy("ussd.no_support_contacts", session.language)
         return f"{body}\n\n{back}", False
 
-    return _chunked_screen(
+    screen, _ = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
     )
+    return screen, False
 
 
 def transition_support_contacts(session, user_input):
@@ -1502,9 +1507,10 @@ def render_emergency_list(session):
         body = get_copy("ussd.no_emergency_contacts", session.language)
         return f"{body}\n\n{back}", False
 
-    return _chunked_screen(
+    screen, _ = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
     )
+    return screen, False
 
 
 def transition_emergency_list(session, user_input):
