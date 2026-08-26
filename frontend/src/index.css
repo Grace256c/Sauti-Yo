@@ -32,30 +32,46 @@
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* =========================================================
+   DARK THEME
+========================================================= */
+
 .dark {
   color-scheme: dark;
 
-  --color-background: #151515;
-  --color-surface: #1d1d1d;
-  --color-surface-soft: #242424;
+  --color-background: #141414;
+  --color-surface: #1d1d1c;
+  --color-surface-soft: #242321;
 
-  --color-text-primary: #f7f4ee;
-  --color-text-secondary: #bdb8ae;
+  --color-text-primary: #f5f1e8;
+  --color-text-secondary: #c3bdb2;
 
-  --color-border: #3a3834;
-  --color-border-strong: #4a463f;
+  --color-border: #403d37;
+  --color-border-strong: #575148;
 
   --color-charcoal: #f5f2ec;
   --color-charcoal-soft: #ded8ce;
 
-  --shadow-soft: 0 12px 30px rgba(0, 0, 0, 0.28);
-  --shadow-medium: 0 18px 45px rgba(0, 0, 0, 0.36);
-  --shadow-gold: 0 12px 30px rgba(199, 154, 43, 0.2);
+  --color-gold: #d1a12d;
+  --color-gold-deep: #d5a942;
+  --color-gold-soft: #66542d;
+
+  --color-danger: #d66565;
+  --color-success: #73ad87;
+
+  --shadow-soft: 0 12px 30px rgba(0, 0, 0, 0.34);
+  --shadow-medium: 0 18px 45px rgba(0, 0, 0, 0.44);
+  --shadow-gold: 0 12px 30px rgba(209, 161, 45, 0.17);
 }
+
+/* =========================================================
+   TAILWIND THEME TOKENS
+========================================================= */
 
 @theme {
   --color-gold: var(--color-gold);
@@ -79,6 +95,10 @@
   --color-success: var(--color-success);
 }
 
+/* =========================================================
+   RESET
+========================================================= */
+
 *,
 *::before,
 *::after {
@@ -92,9 +112,12 @@ html {
 
 body {
   margin: 0;
+
   min-width: 320px;
   min-height: 100vh;
+
   overflow-x: hidden;
+
   background: var(--color-background);
   color: var(--color-text-primary);
 
@@ -141,7 +164,54 @@ img {
   color: #1f1f1f;
 }
 
-/* TYPOGRAPHY */
+.dark ::selection {
+  background: var(--color-gold);
+  color: #151515;
+}
+
+/* =========================================================
+   FORM CONTROLS
+========================================================= */
+
+input,
+textarea,
+select {
+  color-scheme: light;
+
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.dark input,
+.dark textarea,
+.dark select {
+  color-scheme: dark;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: color-mix(
+    in srgb,
+    var(--color-text-secondary) 66%,
+    transparent
+  );
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #858077;
+}
+
+select option {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+/* =========================================================
+   TYPOGRAPHY
+========================================================= */
 
 .heading-serif {
   font-family: Georgia, "Times New Roman", serif;
@@ -152,7 +222,9 @@ img {
   text-wrap: balance;
 }
 
-/* LAYOUT */
+/* =========================================================
+   LAYOUT
+========================================================= */
 
 .site-container {
   width: min(100% - 2rem, 80rem);
@@ -187,12 +259,16 @@ img {
   }
 }
 
-/* GOLD DETAILS */
+/* =========================================================
+   GOLD DETAILS
+========================================================= */
 
 .gold-rule {
   width: 3rem;
   height: 2px;
+
   background: var(--color-gold);
+
   border-radius: 999px;
 }
 
@@ -200,56 +276,96 @@ img {
   border: 1px solid var(--color-gold);
 }
 
-/* CARDS */
+/* =========================================================
+   CARDS
+========================================================= */
 
 .card-surface {
   background: var(--color-surface);
+
   border: 1px solid var(--color-border);
+
   box-shadow: var(--shadow-soft);
 
   transition:
     transform 220ms ease,
+    background-color 220ms ease,
     box-shadow 220ms ease,
     border-color 220ms ease;
 }
 
 .card-surface:hover {
   transform: translateY(-3px);
+
   box-shadow: var(--shadow-medium);
+
   border-color: var(--color-gold-soft);
 }
 
-/* IMAGES */
+.dark .card-surface {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.015),
+    var(--shadow-soft);
+}
+
+.dark .card-surface:hover {
+  border-color: var(--color-gold-soft);
+}
+
+/* =========================================================
+   IMAGES
+========================================================= */
 
 .image-frame {
   overflow: hidden;
+
   border: 1px solid var(--color-border);
+
   background: var(--color-surface);
+
   box-shadow: var(--shadow-soft);
+}
+
+.dark .image-frame {
+  border-color: var(--color-border-strong);
 }
 
 .image-frame img {
   width: 100%;
   height: 100%;
+
   object-fit: cover;
 }
 
 .image-soften {
-  filter: saturate(0.94) contrast(0.98);
+  filter:
+    saturate(0.94)
+    contrast(0.98);
 }
 
 .dark .image-soften {
-  filter: saturate(0.76) brightness(0.78) contrast(1.02);
+  filter:
+    saturate(0.76)
+    brightness(0.78)
+    contrast(1.02);
 }
 
-/* LEGAL BACKGROUNDS */
+/* =========================================================
+   LEGAL BACKGROUNDS
+========================================================= */
 
 .legal-image {
-  filter: grayscale(1) contrast(0.92) brightness(1.08);
+  filter:
+    grayscale(1)
+    contrast(0.92)
+    brightness(1.08);
 }
 
 .dark .legal-image {
-  filter: grayscale(1) contrast(1.05) brightness(0.55);
+  filter:
+    grayscale(1)
+    contrast(1.05)
+    brightness(0.55);
 }
 
 .legal-overlay-light {
@@ -265,19 +381,23 @@ img {
 .dark .legal-overlay-light {
   background: linear-gradient(
     90deg,
-    rgba(21, 21, 21, 0.97) 0%,
-    rgba(21, 21, 21, 0.9) 45%,
-    rgba(21, 21, 21, 0.68) 72%,
-    rgba(21, 21, 21, 0.35) 100%
+    rgba(20, 20, 20, 0.98) 0%,
+    rgba(20, 20, 20, 0.92) 45%,
+    rgba(20, 20, 20, 0.7) 72%,
+    rgba(20, 20, 20, 0.38) 100%
   );
 }
 
-/* BUTTONS */
+/* =========================================================
+   BUTTONS
+========================================================= */
 
 .btn-primary {
   display: inline-flex;
+
   align-items: center;
   justify-content: center;
+
   gap: 0.5rem;
 
   min-height: 44px;
@@ -288,6 +408,7 @@ img {
   border: 1px solid var(--color-gold);
 
   background: var(--color-gold);
+
   color: #1f1f1f;
 
   font-weight: 700;
@@ -295,19 +416,34 @@ img {
   transition:
     transform 180ms ease,
     background-color 180ms ease,
+    border-color 180ms ease,
     box-shadow 180ms ease;
 }
 
 .btn-primary:hover {
   transform: translateY(-1px);
+
   background: var(--color-gold-deep);
+  border-color: var(--color-gold-deep);
+
   box-shadow: var(--shadow-gold);
+}
+
+.dark .btn-primary {
+  color: #171717;
+}
+
+.dark .btn-primary:hover {
+  background: #ddb347;
+  border-color: #ddb347;
 }
 
 .btn-secondary {
   display: inline-flex;
+
   align-items: center;
   justify-content: center;
+
   gap: 0.5rem;
 
   min-height: 44px;
@@ -318,6 +454,7 @@ img {
   border: 1px solid var(--color-gold);
 
   background: transparent;
+
   color: var(--color-text-primary);
 
   font-weight: 700;
@@ -325,23 +462,179 @@ img {
   transition:
     background-color 180ms ease,
     color 180ms ease,
-    transform 180ms ease;
+    transform 180ms ease,
+    border-color 180ms ease;
 }
 
 .btn-secondary:hover {
   transform: translateY(-1px);
+
   background: var(--color-gold);
+
   color: #1f1f1f;
 }
 
-/* FOCUS */
+/* =========================================================
+   PARTNER PORTAL DARK POLISH
+========================================================= */
+
+/*
+ * Give gold-accented panels more separation
+ * without making them bright.
+ */
+
+.dark .bg-gold\/5 {
+  background-color: rgba(209, 161, 45, 0.07);
+}
+
+.dark .bg-gold\/10 {
+  background-color: rgba(209, 161, 45, 0.11);
+}
+
+.dark .bg-gold\/15 {
+  background-color: rgba(209, 161, 45, 0.15);
+}
+
+/*
+ * Slightly stronger borders make nested surfaces
+ * easier to distinguish.
+ */
+
+.dark .border-border {
+  border-color: var(--color-border);
+}
+
+.dark .border-border-strong {
+  border-color: var(--color-border-strong);
+}
+
+/*
+ * Keep secondary text readable in dark mode.
+ */
+
+.dark .text-text-secondary {
+  color: var(--color-text-secondary);
+}
+
+/*
+ * Prevent disabled controls from becoming too faint.
+ */
+
+.dark button:disabled,
+.dark input:disabled,
+.dark textarea:disabled,
+.dark select:disabled {
+  opacity: 0.62;
+}
+
+/*
+ * Ensure Tailwind surface utilities inherit the
+ * updated dark-mode tokens consistently.
+ */
+
+.dark .bg-background {
+  background-color: var(--color-background);
+}
+
+.dark .bg-surface {
+  background-color: var(--color-surface);
+}
+
+.dark .bg-surface-soft {
+  background-color: var(--color-surface-soft);
+}
+
+/*
+ * Gold labels and small status text need a little
+ * more clarity on dark surfaces.
+ */
+
+.dark .text-gold {
+  color: var(--color-gold);
+}
+
+.dark .text-gold-deep {
+  color: var(--color-gold-deep);
+}
+
+/*
+ * Improve nested portal cards without adding
+ * obvious shadows everywhere.
+ */
+
+.dark .bg-surface.border,
+.dark .bg-background.border {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.012);
+}
+
+/*
+ * Inputs should feel intentionally dark rather
+ * than simply inheriting generic browser styling.
+ */
+
+.dark input,
+.dark textarea,
+.dark select {
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.dark input:hover,
+.dark textarea:hover,
+.dark select:hover {
+  border-color: var(--color-border-strong);
+}
+
+.dark input:focus,
+.dark textarea:focus,
+.dark select:focus {
+  border-color: var(--color-gold);
+}
+
+/*
+ * Checkbox/radio accent.
+ */
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--color-gold);
+}
+
+/* =========================================================
+   SCROLLBAR
+========================================================= */
+
+* {
+  scrollbar-width: thin;
+
+  scrollbar-color:
+    var(--color-border-strong)
+    var(--color-background);
+}
+
+.dark * {
+  scrollbar-color:
+    #575148
+    #141414;
+}
+
+/* =========================================================
+   FOCUS
+========================================================= */
 
 :focus-visible {
   outline: 3px solid rgba(199, 154, 43, 0.42);
   outline-offset: 3px;
 }
 
-/* ANIMATIONS */
+.dark :focus-visible {
+  outline-color: rgba(209, 161, 45, 0.58);
+}
+
+/* =========================================================
+   ANIMATIONS
+========================================================= */
 
 @keyframes fade-up {
   from {
@@ -374,7 +667,9 @@ img {
   animation: float-soft 5s ease-in-out infinite;
 }
 
-/* ACCESSIBILITY */
+/* =========================================================
+   ACCESSIBILITY
+========================================================= */
 
 @media (prefers-reduced-motion: reduce) {
   html {
