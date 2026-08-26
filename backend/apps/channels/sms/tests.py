@@ -38,7 +38,8 @@ class SendSmsTests(TestCase):
         africastalking_client._sms_service = None
 
     def test_send_sms_calls_sdk_with_message_and_recipient(self):
-        africastalking_client.send_sms("+256700000000", "Hello")
+        with self.settings(AFRICASTALKING_SMS_SENDER_ID=""):
+            africastalking_client.send_sms("+256700000000", "Hello")
         self.mock_sms_service.send.assert_called_once_with(
             "Hello", ["+256700000000"], sender_id=None
         )
