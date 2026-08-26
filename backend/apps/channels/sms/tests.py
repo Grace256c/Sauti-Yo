@@ -3,12 +3,12 @@ from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
 from django.db import IntegrityError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.channels import africastalking_client
 from apps.channels.models import SmsContext
-from apps.channels.sms import handler
+from apps.channels.sms import ai_classifier, handler
 from apps.channels.sms.handler import handle_sms_request
 from apps.channels.sms.keywords import (
     match_danger,
@@ -525,3 +525,60 @@ class SmsCallbackViewTests(TestCase):
             {"from": "+256700000000", "text": "home"},
         )
         self.assertEqual(response.status_code, 200)
+
+
+def _mock_text_response(text):
+    block = MagicMock()
+    block.type = "text"
+    block.text = text
+    response = MagicMock()
+    response.content = [block]
+    return response
+
+
+class ClassifySituationTests(TestCase):
+    def setUp(self):
+        _create_home_safety_situation()
+        self.mock_client = MagicMock()
+        ai_classifier._client = self.mock_client
+
+    def tearDown(self):
+        ai_classifier._client = None
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_slug_when_model_names_real_situation(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("home-safety")
+        )
+        result = ai_classifier.classify_situation("someone hurt me at home")
+        self.assertEqual(result, "home-safety")
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_when_model_says_none(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("NONE")
+        )
+        result = ai_classifier.classify_situation("what's the weather today")
+        self.assertIsNone(result)
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_for_hallucinated_slug(self):
+        self.mock_client.with_options.return_value.messages.create.return_value = (
+            _mock_text_response("made-up-slug")
+        )
+        result = ai_classifier.classify_situation("something unrelated")
+        self.assertIsNone(result)
+
+    @override_settings(LLM_API_KEY="test-key")
+    def test_returns_none_when_client_raises(self):
+        self.mock_client.with_options.return_value.messages.create.side_effect = (
+            RuntimeError("boom")
+        )
+        result = ai_classifier.classify_situation("anything")
+        self.assertIsNone(result)
+
+    @override_settings(LLM_API_KEY="")
+    def test_returns_none_and_skips_call_when_api_key_unset(self):
+        result = ai_classifier.classify_situation("anything")
+        self.assertIsNone(result)
+        self.mock_client.with_options.assert_not_called()
