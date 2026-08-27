@@ -57,6 +57,18 @@ SUPPORT_SERVICES = {
         "coverage": "National",
         "is_emergency_service": False,
     },
+    "child_helpline": {
+        "name": "Sauti 116 - Child Helpline",
+        "service_type": "Emergency / Child Protection",
+        "description": (
+            "Free, 24/7 toll-free helpline run by the Ministry of "
+            "Gender, Labour & Social Development with UNICEF, for "
+            "reporting child abuse and neglect."
+        ),
+        "phone_number": "116",
+        "coverage": "National",
+        "is_emergency_service": True,
+    },
 }
 
 
@@ -74,6 +86,7 @@ class Command(BaseCommand):
         self._seed_eviction()
         self._seed_domestic_violence()
         self._seed_sexual_harassment()
+        self._seed_child_abuse()
 
         self.stdout.write(
             self.style.SUCCESS("Sauti Yo pilot content seeded successfully.")
@@ -489,4 +502,105 @@ class Command(BaseCommand):
         legal_aid = self._support_service("legal_aid")
         police_gbv = self._support_service("police_gbv")
         rights_topic.support_services.add(fida, legal_aid, police_gbv)
+
+    def _seed_child_abuse(self):
+        situation, _ = Situation.objects.update_or_create(
+            slug="child-abuse",
+            defaults={
+                "title": "Child abuse or neglect",
+                "description": (
+                    "Information on a child's legal protections and how "
+                    "to get immediate help if a child is being abused, "
+                    "neglected, or is unsafe."
+                ),
+                "risk_level": "high_risk",
+                "is_active": True,
+            },
+        )
+
+        rights_topic, _ = RightsTopic.objects.update_or_create(
+            slug="child-protection-rights",
+            defaults={
+                "title": "A child's right to protection under the law",
+                "summary": (
+                    "Uganda's Children Act protects children from abuse, "
+                    "neglect, and exploitation. Reporting suspected abuse "
+                    "to police or a Probation and Social Welfare Officer "
+                    "is free, and a child can be moved to a place of "
+                    "safety while the case is investigated."
+                ),
+                "rights_category": "safety-protection",
+                "risk_level": "high_risk",
+                "source_name": (
+                    "Children Act, Cap. 59 (as amended by the Children "
+                    "(Amendment) Act, 2016), Laws of Uganda"
+                ),
+                "source_url": (
+                    "https://ulii.org/en/akn/ug/act/2016/2016/"
+                    "eng@2016-01-05"
+                ),
+                "reviewed_by": "",
+                "verification_status": "review_required",
+                "is_active": True,
+            },
+        )
+
+        SituationRightsTopic.objects.get_or_create(
+            situation=situation,
+            rights_topic=rights_topic,
+        )
+
+        SafetyResponse.objects.update_or_create(
+            rights_topic=rights_topic,
+            trigger_key="default",
+            defaults={
+                "message": (
+                    "The child's safety matters. If a child is in "
+                    "immediate danger, get them to a safe place if you "
+                    "can and call the Uganda Police GBV Helpline on "
+                    "0800 199 195 (toll-free) or the Sauti 116 Child "
+                    "Helpline on 116, both free and available 24/7."
+                ),
+                "is_active": True,
+            },
+        )
+
+        self._seed_action_steps(
+            rights_topic,
+            [
+                (
+                    1,
+                    "Get the child to safety first",
+                    "If the child is in danger right now, prioritise "
+                    "getting them somewhere safe over anything else on "
+                    "this list.",
+                    True,
+                ),
+                (
+                    2,
+                    "Report to the Police Family & Child Protection desk",
+                    "You can report at any police station, or call the "
+                    "GBV helpline on 0800 199 195.",
+                    False,
+                ),
+                (
+                    3,
+                    "Call the Sauti 116 Child Helpline",
+                    "116 is free, toll-free, and available 24/7 for "
+                    "reporting child abuse and neglect.",
+                    False,
+                ),
+                (
+                    4,
+                    "Tell a Probation and Social Welfare Officer",
+                    "Your local government office has an officer who "
+                    "can investigate and arrange care for the child.",
+                    False,
+                ),
+            ],
+        )
+
+        child_helpline = self._support_service("child_helpline")
+        police_gbv = self._support_service("police_gbv")
+        rights_topic.support_services.add(child_helpline, police_gbv)
 
