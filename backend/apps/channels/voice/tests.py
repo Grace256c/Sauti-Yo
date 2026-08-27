@@ -11,7 +11,13 @@ from apps.channels.sms.tests import (
     _create_land_situation_without_safety_response,
 )
 from apps.channels.voice import sessions, transcription, ivr
-from apps.channels.voice.handler import handle_voice_request
+from apps.channels.voice.handler import (
+    _crisis_support_phone_number,
+    _primary_support_phone_number,
+    handle_voice_request,
+)
+from apps.rights.models import RightsTopic, Situation, SituationRightsTopic
+from apps.support.models import SupportService
 
 
 class VoiceSessionModelTests(TestCase):
@@ -244,16 +250,23 @@ class HandleVoiceRequestTests(TestCase):
         session = VoiceSession.objects.get(session_id="sess-1")
         self.assertEqual(session.state, "awaiting_recording")
 
-    def test_recording_with_danger_words_ends_call_with_safety_reply(self):
+    def test_recording_with_danger_words_speaks_safety_reply_with_connect_offer(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
         handle_voice_request("sess-2", "+256700000000", "1", "", "")
         with self._mock_transcript("he has a weapon right now"):
             xml = handle_voice_request(
                 "sess-2", "+256700000000", "1", "", "https://example.com/r.mp3"
             )
         self.assertIn("999", xml)
-        self.assertNotIn("<GetDigits", xml)
+        self.assertIn("<GetDigits", xml)
         session = VoiceSession.objects.get(session_id="sess-2")
-        self.assertFalse(session.is_active)
+        self.assertTrue(session.is_active)
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
 
     def test_danger_words_short_circuit_before_situation_classification(self):
         _create_home_safety_situation()
@@ -274,7 +287,8 @@ class HandleVoiceRequestTests(TestCase):
         mock_classify.assert_not_called()
         self.assertIn("999", xml)
         session = VoiceSession.objects.get(session_id="sess-2b")
-        self.assertFalse(session.is_active)
+        self.assertTrue(session.is_active)
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
 
     def test_non_high_risk_situation_speaks_reply_and_offers_menu(self):
         _create_land_situation_without_safety_response()
@@ -303,7 +317,7 @@ class HandleVoiceRequestTests(TestCase):
         self.assertEqual(session.state, "awaiting_safety_digit")
         self.assertEqual(session.context["slug"], "home-safety")
 
-    def test_safety_digit_2_ends_call_with_safety_reply(self):
+    def test_safety_digit_2_speaks_safety_reply_with_connect_offer(self):
         _create_home_safety_situation()
         VoiceSession.objects.create(
             session_id="sess-5",
@@ -313,9 +327,10 @@ class HandleVoiceRequestTests(TestCase):
         )
         xml = handle_voice_request("sess-5", "+256700000000", "1", "2", "")
         self.assertIn("Your safety matters. Call Sauti 116.", xml)
-        self.assertNotIn("<GetDigits", xml)
+        self.assertIn("<GetDigits", xml)
         session = VoiceSession.objects.get(session_id="sess-5")
-        self.assertFalse(session.is_active)
+        self.assertTrue(session.is_active)
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
 
     def test_safety_digit_1_continues_to_situation_reply(self):
         _create_home_safety_situation()
@@ -361,7 +376,8 @@ class HandleVoiceRequestTests(TestCase):
         xml = handle_voice_request("sess-6c", "+256700000000", "1", "9", "")
         self.assertIn("Your safety matters. Call Sauti 116.", xml)
         session = VoiceSession.objects.get(session_id="sess-6c")
-        self.assertFalse(session.is_active)
+        self.assertTrue(session.is_active)
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
 
     def test_safety_digit_1_after_reprompt_still_reaches_situation_reply(self):
         _create_home_safety_situation()
@@ -578,3 +594,305 @@ class VoiceCallbackViewTests(TestCase):
         self.assertIn(b"<Say>", response.content)
         self.assertNotIn(b"<Record", response.content)
         self.assertNotIn(b"<GetDigits", response.content)
+
+
+def _create_high_risk_situation_without_support_service():
+    """
+    A high-risk situation whose linked rights topic has no support_services
+    at all - used to exercise _crisis_support_phone_number's fallback to
+    the general emergency-services list when the situation-specific lookup
+    comes up empty.
+    """
+    situation = Situation.objects.create(
+        slug="high-risk-no-number",
+        title="High risk situation with no linked support number",
+        risk_level="high_risk",
+    )
+    topic = RightsTopic.objects.create(
+        slug="high-risk-no-number-rights",
+        title="High Risk Rights",
+        summary="Placeholder rights summary.",
+        risk_level="high_risk",
+    )
+    SituationRightsTopic.objects.create(situation=situation, rights_topic=topic)
+    return situation
+
+
+@override_settings(LLM_API_KEY="", OPENAI_API_KEY="test-key")
+class DirectConnectTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _mock_transcript(self, text):
+        return patch(
+            "apps.channels.voice.handler.transcription.transcribe_recording",
+            return_value=text,
+        )
+
+    def test_primary_support_phone_number_from_situation_detail(self):
+        situation = _create_home_safety_situation()
+        from apps.rights.services import get_situation_detail
+
+        detail = get_situation_detail(situation.slug)
+        self.assertEqual(_primary_support_phone_number(detail), "116")
+
+    def test_primary_support_phone_number_general_emergency_when_no_detail(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        self.assertEqual(
+            _primary_support_phone_number(None), "0800199195"
+        )
+
+    def test_primary_support_phone_number_none_when_nothing_available(self):
+        self.assertIsNone(_primary_support_phone_number(None))
+
+    def test_primary_support_phone_number_none_when_situation_has_none_linked(self):
+        # _primary_support_phone_number is the post-reply-menu ("connect
+        # me") lookup, and it must never silently misdirect a non-crisis
+        # caller toward the general emergency/GBV line just because their
+        # situation happens to have no linked support number - it should
+        # return None here, same as apps.channels.sms.templates'
+        # _first_support_service/build_support_reply do for this exact case.
+        situation = _create_land_situation_without_safety_response()
+        from apps.rights.services import get_situation_detail
+
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        detail = get_situation_detail(situation.slug)
+        self.assertIsNone(_primary_support_phone_number(detail))
+
+    def test_crisis_support_phone_number_falls_back_to_general_when_situation_has_none(
+        self,
+    ):
+        situation = _create_land_situation_without_safety_response()
+        from apps.rights.services import get_situation_detail
+
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        detail = get_situation_detail(situation.slug)
+        self.assertEqual(_crisis_support_phone_number(detail), "0800199195")
+
+    def test_danger_words_offer_connect_instead_of_ending_immediately(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        handle_voice_request("sess-dc-1", "+256700000000", "1", "", "")
+        with self._mock_transcript("he has a weapon right now"):
+            xml = handle_voice_request(
+                "sess-dc-1", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("999", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-1")
+        self.assertTrue(session.is_active)
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
+
+    def test_pressing_1_after_danger_words_dials_general_emergency_number(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        handle_voice_request("sess-dc-2", "+256700000000", "1", "", "")
+        with self._mock_transcript("he has a weapon right now"):
+            handle_voice_request(
+                "sess-dc-2", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        xml = handle_voice_request("sess-dc-2", "+256700000000", "1", "1", "")
+        self.assertIn('<Dial phoneNumbers="0800199195"', xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-2")
+        self.assertFalse(session.is_active)
+
+    def test_pressing_other_digit_after_danger_words_just_ends_call(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        handle_voice_request("sess-dc-3", "+256700000000", "1", "", "")
+        with self._mock_transcript("he has a weapon right now"):
+            handle_voice_request(
+                "sess-dc-3", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        xml = handle_voice_request("sess-dc-3", "+256700000000", "1", "5", "")
+        self.assertNotIn("<Dial", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-3")
+        self.assertFalse(session.is_active)
+
+    def test_no_digit_after_danger_words_ends_call_not_regreets(self):
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        handle_voice_request("sess-dc-4", "+256700000000", "1", "", "")
+        with self._mock_transcript("he has a weapon right now"):
+            handle_voice_request(
+                "sess-dc-4", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        xml = handle_voice_request("sess-dc-4", "+256700000000", "1", "", "")
+        self.assertNotIn("Welcome to Sauti Yo", xml)
+        self.assertNotIn("<Dial", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-4")
+        self.assertFalse(session.is_active)
+
+    def test_safety_digit_2_offers_connect_instead_of_ending_immediately(self):
+        situation = _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-dc-5",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": situation.slug, "discreet": False},
+        )
+        xml = handle_voice_request("sess-dc-5", "+256700000000", "1", "2", "")
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Your safety matters. Call Sauti 116.", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-5")
+        self.assertTrue(session.is_active)
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
+
+    def test_pressing_1_after_safety_digit_2_dials_situation_support_number(self):
+        situation = _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-dc-6",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": situation.slug, "discreet": False},
+        )
+        handle_voice_request("sess-dc-6", "+256700000000", "1", "2", "")
+        xml = handle_voice_request("sess-dc-6", "+256700000000", "1", "1", "")
+        self.assertIn('<Dial phoneNumbers="116"', xml)
+
+    def test_safety_checkin_failed_closed_offers_connect(self):
+        situation = _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-dc-7",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={
+                "slug": situation.slug,
+                "discreet": False,
+                "safety_check_attempts": 1,
+            },
+        )
+        xml = handle_voice_request("sess-dc-7", "+256700000000", "1", "9", "")
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Your safety matters. Call Sauti 116.", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-7")
+        self.assertEqual(session.state, "awaiting_crisis_connect_digit")
+
+    def test_post_reply_menu_digit_3_dials_support_number(self):
+        situation = _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-dc-8",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": situation.slug, "discreet": False},
+        )
+        xml = handle_voice_request("sess-dc-8", "+256700000000", "1", "3", "")
+        self.assertIn('<Dial phoneNumbers="116"', xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-8")
+        self.assertFalse(session.is_active)
+
+    def test_post_reply_menu_digit_3_falls_back_to_speaking_when_no_number(self):
+        situation = _create_land_situation_without_safety_response()
+        VoiceSession.objects.create(
+            session_id="sess-dc-9",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": situation.slug, "discreet": False},
+        )
+        xml = handle_voice_request("sess-dc-9", "+256700000000", "1", "3", "")
+        self.assertNotIn("<Dial", xml)
+        self.assertIn("<GetDigits", xml)
+
+    def test_post_reply_menu_digit_3_does_not_fall_back_to_general_emergency_number(
+        self,
+    ):
+        # Regression test: a standard-risk situation (e.g. a land dispute)
+        # with no linked support service must NOT be silently connected to
+        # the general emergency/GBV line just because one happens to be
+        # configured - that would misdirect a non-crisis caller. Unlike the
+        # crisis-connect path, "press 3" on the post-reply menu should only
+        # ever use a number actually linked to this situation.
+        situation = _create_land_situation_without_safety_response()
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        VoiceSession.objects.create(
+            session_id="sess-dc-13",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": situation.slug, "discreet": False},
+        )
+        xml = handle_voice_request("sess-dc-13", "+256700000000", "1", "3", "")
+        self.assertNotIn("<Dial", xml)
+        self.assertIn("<GetDigits", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-13")
+        self.assertTrue(session.is_active)
+
+    def test_getdigits_timeout_during_crisis_connect_ends_call_not_regreets(self):
+        situation = _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-dc-10",
+            phone_number="+256700000000",
+            state="awaiting_crisis_connect_digit",
+            context={"slug": situation.slug},
+        )
+        xml = handle_voice_request("sess-dc-10", "+256700000000", "1", "", "")
+        self.assertNotIn("Welcome to Sauti Yo", xml)
+        self.assertNotIn("<Dial", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-10")
+        self.assertFalse(session.is_active)
+
+    def test_safety_digit_2_then_1_falls_back_to_general_number_when_situation_has_none(
+        self,
+    ):
+        situation = _create_high_risk_situation_without_support_service()
+        SupportService.objects.create(
+            name="Uganda Police GBV Helpline",
+            service_type="helpline",
+            phone_number="0800199195",
+            is_emergency_service=True,
+        )
+        VoiceSession.objects.create(
+            session_id="sess-dc-11",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": situation.slug, "discreet": False},
+        )
+        handle_voice_request("sess-dc-11", "+256700000000", "1", "2", "")
+        xml = handle_voice_request("sess-dc-11", "+256700000000", "1", "1", "")
+        self.assertIn('<Dial phoneNumbers="0800199195"', xml)
+
+    def test_offer_crisis_connect_skips_offer_when_nothing_dialable_anywhere(self):
+        handle_voice_request("sess-dc-12", "+256700000000", "1", "", "")
+        with self._mock_transcript("he has a weapon right now"):
+            xml = handle_voice_request(
+                "sess-dc-12", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        self.assertIn("999", xml)
+        self.assertNotIn("<GetDigits", xml)
+        session = VoiceSession.objects.get(session_id="sess-dc-12")
+        self.assertFalse(session.is_active)

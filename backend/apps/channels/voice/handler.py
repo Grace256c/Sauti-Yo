@@ -9,6 +9,7 @@ from apps.channels.voice.sessions import (
     update_session,
 )
 from apps.rights.services import get_situation_detail
+from apps.support.models import SupportService
 
 RATE_LIMIT_MAX_CALLS = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
@@ -40,6 +41,55 @@ def _compose_reply(detail, mode):
     return reworded or template_text
 
 
+def _primary_support_phone_number(detail):
+    if detail is not None:
+        for topic in detail["rights_topics"]:
+            for service in topic["support_services"]:
+                if service.get("phone_number"):
+                    return service["phone_number"]
+        return None
+    return _general_emergency_phone_number()
+
+
+def _general_emergency_phone_number():
+    service = (
+        SupportService.objects.filter(is_emergency_service=True, is_active=True)
+        .order_by("name")
+        .values("phone_number")
+        .first()
+    )
+    return service["phone_number"] if service else None
+
+
+def _crisis_support_phone_number(detail):
+    # Unlike _primary_support_phone_number (used by the post-reply menu's
+    # "connect me" option, which must never misdirect a non-crisis caller
+    # toward the general emergency/GBV line just because their situation
+    # has no linked number - see apps.channels.sms.templates.build_support_reply
+    # for the same no-fallback rule on that side), the crisis-connect path
+    # is explicitly allowed to fall back: once we're already offering "press
+    # 1 to connect" after a danger-word/safety-check-in crisis signal, any
+    # reachable emergency number is better than none.
+    return _primary_support_phone_number(detail) or _general_emergency_phone_number()
+
+
+def _offer_crisis_connect(session, detail):
+    safety_text = templates.build_safety_reply(detail)
+    if _crisis_support_phone_number(detail) is None:
+        # Nothing dialable exists for this situation, even after falling
+        # back to the general emergency list - don't promise a connection
+        # the call can't deliver. Fall back to the old speak-and-end
+        # behavior instead of offering a "press 1" that would go nowhere.
+        end_session(session)
+        return ivr.build_final_message_xml(safety_text)
+    update_session(
+        session,
+        state="awaiting_crisis_connect_digit",
+        context={"slug": detail["slug"] if detail is not None else None},
+    )
+    return ivr.build_safety_reply_with_connect_xml(safety_text)
+
+
 def handle_voice_request(session_id, phone_number, is_active, dtmf_digits, recording_url):
     if is_active == "0":
         VoiceSession.objects.filter(session_id=session_id, is_active=True).update(
@@ -57,12 +107,17 @@ def handle_voice_request(session_id, phone_number, is_active, dtmf_digits, recor
         session_id=session_id, is_active=True
     ).first()
     if existing is not None:
-        if existing.state in ("awaiting_safety_digit", "post_reply_menu"):
+        if existing.state in (
+            "awaiting_safety_digit",
+            "post_reply_menu",
+            "awaiting_crisis_connect_digit",
+        ):
             # A GetDigits timeout comes back from Africa's Talking with empty
             # dtmfDigits. Route it through digit handling with an empty digit
             # rather than falling through to a fresh greeting, which would
-            # silently abandon a pending safety check-in (or post-reply menu)
-            # and waste the rate-limit budget on repeated timeouts.
+            # silently abandon a pending safety check-in, post-reply menu, or
+            # crisis-connect offer, and waste the rate-limit budget on
+            # repeated timeouts.
             return _handle_digits(session_id, phone_number, "")
         if existing.state == "awaiting_recording":
             # Africa's Talking can call back with recordingUrl="" (not
@@ -92,8 +147,7 @@ def _handle_recording(session_id, phone_number, recording_url):
         return _handle_unmatched(session)
 
     if keywords.match_danger(transcript):
-        end_session(session)
-        return ivr.build_final_message_xml(templates.build_safety_reply())
+        return _offer_crisis_connect(session, None)
 
     discreet = keywords.match_discreet(transcript)
     slug = keywords.match_situation(transcript) or ai_classifier.classify_situation(
@@ -144,6 +198,9 @@ def _handle_digits(session_id, phone_number, dtmf_digits):
     if session.state == "post_reply_menu":
         return _handle_menu_digit(session, dtmf_digits)
 
+    if session.state == "awaiting_crisis_connect_digit":
+        return _handle_crisis_connect_digit(session, dtmf_digits)
+
     end_session(session)
     return ivr.build_closing_xml()
 
@@ -160,8 +217,7 @@ def _handle_safety_digit(session, digit):
         return _speak_situation_reply(session, slug, detail, discreet)
 
     if digit == "2":
-        end_session(session)
-        return ivr.build_final_message_xml(templates.build_safety_reply(detail))
+        return _offer_crisis_connect(session, detail)
 
     # Anything other than an explicit "1" (safe) or "2" (not safe) - a
     # garbled DTMF tone, an off-menu digit, or a GetDigits timeout - must
@@ -170,14 +226,26 @@ def _handle_safety_digit(session, digit):
     # continuing to the ordinary situation reply.
     attempts = session.context.get("safety_check_attempts", 0)
     if attempts >= MAX_SAFETY_CHECK_ATTEMPTS - 1:
-        end_session(session)
-        return ivr.build_final_message_xml(templates.build_safety_reply(detail))
+        return _offer_crisis_connect(session, detail)
 
     update_session(
         session,
         context={**session.context, "safety_check_attempts": attempts + 1},
     )
     return ivr.build_safety_checkin_xml(discreet)
+
+
+def _handle_crisis_connect_digit(session, digit):
+    slug = session.context.get("slug")
+    detail = get_situation_detail(slug) if slug else None
+
+    if digit == "1":
+        phone = _crisis_support_phone_number(detail)
+        end_session(session)
+        return ivr.build_dial_xml(phone) if phone else ivr.build_closing_xml()
+
+    end_session(session)
+    return ivr.build_closing_xml()
 
 
 def _handle_menu_digit(session, digit):
@@ -196,6 +264,13 @@ def _handle_menu_digit(session, digit):
 
     if digit == "2":
         return ivr.build_reply_xml(_compose_reply(detail, mode))
+
+    if digit == "3":
+        phone = _primary_support_phone_number(detail)
+        if phone:
+            end_session(session)
+            return ivr.build_dial_xml(phone)
+        return ivr.build_reply_xml(templates.build_support_reply(detail, mode))
 
     end_session(session)
     return ivr.build_closing_xml()
