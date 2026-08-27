@@ -140,3 +140,13 @@ class SituationSerializer(serializers.ModelSerializer):
             "rights_links",
             "is_active",
         ]
+
+
+class ConcernAnalysisRequestSerializer(
+    serializers.Serializer
+):
+    concern = serializers.CharField(
+        allow_blank=False,
+        trim_whitespace=True,
+        max_length=2000,
+    )

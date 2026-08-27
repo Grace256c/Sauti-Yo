@@ -115,3 +115,63 @@ export async function getRightsTopic(
     `/api/rights/topics/${slug}/`,
   );
 }
+
+
+
+export interface ConcernAnalysisResponse {
+  matched: boolean;
+  detail?: string;
+  concern?: string;
+  match_method?: string;
+  match_score?: number;
+  situation?: {
+    slug: string;
+    title: string;
+    description: string;
+    risk_level: string;
+    rights_topics: Array<{
+      slug: string;
+      title: string;
+      summary: string;
+      action_steps: Array<{
+        order: number;
+        title: string;
+        description: string;
+        is_safety_critical: boolean;
+      }>;
+      safety_responses: Array<{
+        trigger_key: string;
+        message: string;
+      }>;
+      support_services: Array<{
+        name: string;
+        phone_number: string;
+        is_emergency_service: boolean;
+      }>;
+      legal_provisions: Array<{
+        source_type: string;
+        law_title: string;
+        provision_reference: string;
+        provision_heading: string;
+        plain_language_explanation: string;
+        source_url: string;
+        jurisdiction: string;
+        verification_status: string;
+      }>;
+    }>;
+  };
+}
+
+export async function analyseRightsConcern(
+  concern: string,
+) {
+  return apiRequest<ConcernAnalysisResponse>(
+    "/api/rights/analyse/",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        concern,
+      }),
+    },
+  );
+}

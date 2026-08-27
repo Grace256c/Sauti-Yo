@@ -1,4 +1,5 @@
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from apps.content.models import ChannelContent
 from apps.rights.models import (
@@ -10,6 +11,7 @@ from apps.rights.models import (
     SituationRightsTopic,
 )
 from apps.rights.services import (
+    analyse_concern,
     get_channel_text,
     get_safety_message,
     get_situation_detail,
@@ -209,4 +211,265 @@ class LegalProvisionTests(TestCase):
                 "Constitution of the Republic of Uganda "
                 "— Article 21"
             ),
+        )
+
+
+
+class ConcernAnalysisTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.work = Situation.objects.create(
+            slug="problem-at-work",
+            title="Problem at work",
+            description="Workplace rights problem.",
+        )
+
+        self.work_topic = RightsTopic.objects.create(
+            slug="workplace-rights",
+            title="Workplace rights",
+            summary="Workplace legal information.",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=self.work,
+            rights_topic=self.work_topic,
+        )
+
+        LegalProvision.objects.create(
+            rights_topic=self.work_topic,
+            source_type="act",
+            law_title="Employment Act",
+            provision_reference="Section 65C",
+            provision_heading="Protected reasons",
+            plain_language_explanation=(
+                "Certain protected reasons do not "
+                "justify dismissal."
+            ),
+            source_url="https://example.com/employment",
+            verification_status="review_required",
+        )
+
+        ActionStep.objects.create(
+            rights_topic=self.work_topic,
+            order=1,
+            title="Keep records",
+            description="Keep useful employment records.",
+        )
+
+        self.eviction = Situation.objects.create(
+            slug="facing-eviction",
+            title="Eviction or housing problem",
+            description="Tenant and eviction rights.",
+        )
+
+        self.eviction_topic = RightsTopic.objects.create(
+            slug="housing-and-eviction-rights",
+            title="Tenant rights",
+            summary="Tenant legal information.",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=self.eviction,
+            rights_topic=self.eviction_topic,
+        )
+
+        LegalProvision.objects.create(
+            rights_topic=self.eviction_topic,
+            source_type="act",
+            law_title="Landlord and Tenant Act, 2022",
+            provision_reference="Section 45",
+            provision_heading="Unlawful eviction",
+            plain_language_explanation=(
+                "A landlord must follow the law."
+            ),
+        )
+
+        self.domestic = Situation.objects.create(
+            slug="domestic-violence",
+            title="Domestic violence",
+            description="Domestic violence protection.",
+            risk_level="high_risk",
+        )
+
+        self.domestic_topic = RightsTopic.objects.create(
+            slug="domestic-violence-protection",
+            title="Protection rights",
+            summary="Domestic violence law.",
+            risk_level="high_risk",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=self.domestic,
+            rights_topic=self.domestic_topic,
+        )
+
+        SafetyResponse.objects.create(
+            rights_topic=self.domestic_topic,
+            trigger_key="default",
+            message="Prioritise your immediate safety.",
+        )
+
+        self.sexual = Situation.objects.create(
+            slug="sexual-harassment",
+            title="Sexual harassment",
+            description="Sexual harassment rights.",
+            risk_level="sensitive",
+        )
+
+        self.sexual_topic = RightsTopic.objects.create(
+            slug="sexual-harassment-rights",
+            title="Sexual harassment rights",
+            summary="Sexual harassment law.",
+            risk_level="sensitive",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=self.sexual,
+            rights_topic=self.sexual_topic,
+        )
+
+        LegalProvision.objects.create(
+            rights_topic=self.sexual_topic,
+            source_type="act",
+            law_title="Employment Act",
+            provision_reference="Section 6",
+            provision_heading="Sexual harassment",
+            plain_language_explanation=(
+                "The Employment Act addresses "
+                "sexual harassment in employment."
+            ),
+        )
+
+    def test_service_matches_pregnancy_dismissal_to_work(self):
+        result = analyse_concern(
+            "My boss fired me because I became pregnant."
+        )
+
+        self.assertIsNotNone(result)
+
+        self.assertEqual(
+            result["situation"]["slug"],
+            "problem-at-work",
+        )
+
+        provisions = result["situation"][
+            "rights_topics"
+        ][0]["legal_provisions"]
+
+        self.assertEqual(
+            provisions[0]["provision_reference"],
+            "Section 65C",
+        )
+
+    def test_service_matches_eviction(self):
+        result = analyse_concern(
+            "My landlord says I must leave the house."
+        )
+
+        self.assertEqual(
+            result["situation"]["slug"],
+            "facing-eviction",
+        )
+
+    def test_service_prioritises_sexual_harassment(self):
+        result = analyse_concern(
+            "My boss keeps making unwanted sexual "
+            "comments at work."
+        )
+
+        self.assertEqual(
+            result["situation"]["slug"],
+            "sexual-harassment",
+        )
+
+    def test_service_matches_domestic_violence(self):
+        result = analyse_concern(
+            "My abusive partner beats me at home."
+        )
+
+        self.assertEqual(
+            result["situation"]["slug"],
+            "domestic-violence",
+        )
+
+        responses = result["situation"][
+            "rights_topics"
+        ][0]["safety_responses"]
+
+        self.assertEqual(
+            len(responses),
+            1,
+        )
+
+    def test_service_returns_none_for_unknown_concern(self):
+        result = analyse_concern(
+            "I want information about registering a company."
+        )
+
+        self.assertIsNone(result)
+
+    def test_api_returns_grounded_match(self):
+        response = self.client.post(
+            "/api/rights/analyse/",
+            {
+                "concern": (
+                    "My employer fired me "
+                    "because I became pregnant."
+                )
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertTrue(
+            response.data["matched"],
+        )
+
+        self.assertEqual(
+            response.data["situation"]["slug"],
+            "problem-at-work",
+        )
+
+    def test_api_returns_unmatched_without_inventing_law(self):
+        response = self.client.post(
+            "/api/rights/analyse/",
+            {
+                "concern": (
+                    "How do I register a new company?"
+                )
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            200,
+        )
+
+        self.assertFalse(
+            response.data["matched"],
+        )
+
+        self.assertNotIn(
+            "situation",
+            response.data,
+        )
+
+    def test_api_rejects_blank_concern(self):
+        response = self.client.post(
+            "/api/rights/analyse/",
+            {
+                "concern": "",
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
         )
