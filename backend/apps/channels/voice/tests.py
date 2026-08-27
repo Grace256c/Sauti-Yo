@@ -1,11 +1,17 @@
 from unittest.mock import MagicMock, patch
 
+from django.core.cache import cache
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from apps.channels.models import VoiceSession
+from apps.channels.sms.tests import (
+    _create_home_safety_situation,
+    _create_land_situation_without_safety_response,
+)
 from apps.channels.voice import sessions, transcription, ivr
+from apps.channels.voice.handler import handle_voice_request
 
 
 class VoiceSessionModelTests(TestCase):
@@ -182,3 +188,304 @@ class IvrXmlTests(TestCase):
     def test_closing_says_thank_you(self):
         xml = ivr.build_closing_xml()
         self.assertIn("Thank you", xml)
+
+
+@override_settings(LLM_API_KEY="", OPENAI_API_KEY="test-key")
+class HandleVoiceRequestTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def _mock_transcript(self, text):
+        return patch(
+            "apps.channels.voice.handler.transcription.transcribe_recording",
+            return_value=text,
+        )
+
+    def test_call_start_returns_greeting(self):
+        xml = handle_voice_request("sess-1", "+256700000000", "1", "", "")
+        self.assertIn("<Record", xml)
+        session = VoiceSession.objects.get(session_id="sess-1")
+        self.assertEqual(session.state, "awaiting_recording")
+
+    def test_recording_with_danger_words_ends_call_with_safety_reply(self):
+        handle_voice_request("sess-2", "+256700000000", "1", "", "")
+        with self._mock_transcript("he has a weapon right now"):
+            xml = handle_voice_request(
+                "sess-2", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        self.assertIn("999", xml)
+        self.assertNotIn("<GetDigits", xml)
+        session = VoiceSession.objects.get(session_id="sess-2")
+        self.assertFalse(session.is_active)
+
+    def test_danger_words_short_circuit_before_situation_classification(self):
+        _create_home_safety_situation()
+        handle_voice_request("sess-2b", "+256700000000", "1", "", "")
+        with self._mock_transcript(
+            "my husband beats me and he has a weapon right now"
+        ):
+            with patch(
+                "apps.channels.voice.handler.ai_classifier.classify_situation"
+            ) as mock_classify:
+                xml = handle_voice_request(
+                    "sess-2b",
+                    "+256700000000",
+                    "1",
+                    "",
+                    "https://example.com/r.mp3",
+                )
+        mock_classify.assert_not_called()
+        self.assertIn("999", xml)
+        session = VoiceSession.objects.get(session_id="sess-2b")
+        self.assertFalse(session.is_active)
+
+    def test_non_high_risk_situation_speaks_reply_and_offers_menu(self):
+        _create_land_situation_without_safety_response()
+        handle_voice_request("sess-3", "+256700000000", "1", "", "")
+        with self._mock_transcript("I have a problem with my land and plot"):
+            xml = handle_voice_request(
+                "sess-3", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        # No ChannelContent/description is seeded for this fixture, so
+        # build_situation_reply falls back to the situation's title.
+        self.assertIn("Land or property problem", xml)
+        self.assertIn("<GetDigits", xml)
+        session = VoiceSession.objects.get(session_id="sess-3")
+        self.assertEqual(session.state, "post_reply_menu")
+        self.assertEqual(session.context["slug"], "land-property")
+
+    def test_high_risk_situation_triggers_safety_checkin(self):
+        _create_home_safety_situation()
+        handle_voice_request("sess-4", "+256700000000", "1", "", "")
+        with self._mock_transcript("my husband beats me"):
+            xml = handle_voice_request(
+                "sess-4", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        self.assertIn("Are you safe", xml)
+        session = VoiceSession.objects.get(session_id="sess-4")
+        self.assertEqual(session.state, "awaiting_safety_digit")
+        self.assertEqual(session.context["slug"], "home-safety")
+
+    def test_safety_digit_2_ends_call_with_safety_reply(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-5",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-5", "+256700000000", "1", "2", "")
+        self.assertIn("Your safety matters. Call Sauti 116.", xml)
+        self.assertNotIn("<GetDigits", xml)
+        session = VoiceSession.objects.get(session_id="sess-5")
+        self.assertFalse(session.is_active)
+
+    def test_safety_digit_1_continues_to_situation_reply(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-6",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-6", "+256700000000", "1", "1", "")
+        self.assertIn("Move to a safer location", xml)
+        self.assertIn("<GetDigits", xml)
+        session = VoiceSession.objects.get(session_id="sess-6")
+        self.assertEqual(session.state, "post_reply_menu")
+
+    def test_safety_digit_off_menu_reprompts_once(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-6b",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-6b", "+256700000000", "1", "5", "")
+        self.assertIn("Are you safe", xml)
+        session = VoiceSession.objects.get(session_id="sess-6b")
+        self.assertEqual(session.state, "awaiting_safety_digit")
+        self.assertEqual(session.context["safety_check_attempts"], 1)
+        self.assertEqual(session.context["slug"], "home-safety")
+
+    def test_safety_digit_off_menu_twice_fails_closed_to_safety_reply(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-6c",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={
+                "slug": "home-safety",
+                "discreet": False,
+                "safety_check_attempts": 1,
+            },
+        )
+        xml = handle_voice_request("sess-6c", "+256700000000", "1", "9", "")
+        self.assertIn("Your safety matters. Call Sauti 116.", xml)
+        session = VoiceSession.objects.get(session_id="sess-6c")
+        self.assertFalse(session.is_active)
+
+    def test_safety_digit_1_after_reprompt_still_reaches_situation_reply(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-6d",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={
+                "slug": "home-safety",
+                "discreet": False,
+                "safety_check_attempts": 1,
+            },
+        )
+        xml = handle_voice_request("sess-6d", "+256700000000", "1", "1", "")
+        self.assertIn("Move to a safer location", xml)
+        session = VoiceSession.objects.get(session_id="sess-6d")
+        self.assertEqual(session.state, "post_reply_menu")
+
+    def test_getdigits_timeout_during_safety_checkin_reprompts_not_greets(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-6e",
+            phone_number="+256700000000",
+            state="awaiting_safety_digit",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-6e", "+256700000000", "1", "", "")
+        self.assertIn("Are you safe", xml)
+        self.assertNotIn("Welcome to Sauti Yo", xml)
+        session = VoiceSession.objects.get(session_id="sess-6e")
+        self.assertEqual(session.state, "awaiting_safety_digit")
+        self.assertEqual(session.context["safety_check_attempts"], 1)
+
+    def test_getdigits_timeout_during_post_reply_menu_ends_call(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-6f",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-6f", "+256700000000", "1", "", "")
+        self.assertIn("Thank you", xml)
+        session = VoiceSession.objects.get(session_id="sess-6f")
+        self.assertFalse(session.is_active)
+
+    def test_no_existing_session_with_empty_digits_still_gets_greeting(self):
+        xml = handle_voice_request("sess-6g", "+256700000000", "1", "", "")
+        self.assertIn("<Record", xml)
+        session = VoiceSession.objects.get(session_id="sess-6g")
+        self.assertEqual(session.state, "awaiting_recording")
+
+    def test_discreet_keyword_omits_service_name_from_reply(self):
+        _create_home_safety_situation()
+        handle_voice_request("sess-7", "+256700000000", "1", "", "")
+        with self._mock_transcript("my husband beats me, please be discreet"):
+            xml = handle_voice_request(
+                "sess-7", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+        session = VoiceSession.objects.get(session_id="sess-7")
+        self.assertTrue(session.context["discreet"])
+        self.assertEqual(session.state, "awaiting_safety_digit")
+        xml = handle_voice_request("sess-7", "+256700000000", "1", "1", "")
+        self.assertNotIn("Sauti 116 - Child", xml)
+        self.assertIn("116", xml)
+
+    def test_discreet_mode_does_not_call_reword_reply(self):
+        _create_land_situation_without_safety_response()
+        handle_voice_request("sess-7b", "+256700000000", "1", "", "")
+        with self._mock_transcript("land and plot problem, please be discreet"):
+            with patch(
+                "apps.channels.voice.handler.ai_classifier.reword_reply"
+            ) as mock_reword:
+                handle_voice_request(
+                    "sess-7b",
+                    "+256700000000",
+                    "1",
+                    "",
+                    "https://example.com/r.mp3",
+                )
+        mock_reword.assert_not_called()
+
+    def test_normal_mode_calls_reword_reply(self):
+        _create_land_situation_without_safety_response()
+        handle_voice_request("sess-7c", "+256700000000", "1", "", "")
+        with self._mock_transcript("I have a problem with my land and plot"):
+            with patch(
+                "apps.channels.voice.handler.ai_classifier.reword_reply"
+            ) as mock_reword:
+                mock_reword.return_value = None
+                handle_voice_request(
+                    "sess-7c",
+                    "+256700000000",
+                    "1",
+                    "",
+                    "https://example.com/r.mp3",
+                )
+        mock_reword.assert_called_once()
+
+    def test_post_reply_menu_digit_1_speaks_support_contacts(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-8",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-8", "+256700000000", "1", "1", "")
+        self.assertIn("116", xml)
+        self.assertIn("<GetDigits", xml)
+
+    def test_post_reply_menu_digit_2_repeats_reply(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-9",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-9", "+256700000000", "1", "2", "")
+        self.assertIn("Move to a safer location", xml)
+
+    def test_post_reply_menu_digit_0_ends_call(self):
+        _create_home_safety_situation()
+        VoiceSession.objects.create(
+            session_id="sess-10",
+            phone_number="+256700000000",
+            state="post_reply_menu",
+            context={"slug": "home-safety", "discreet": False},
+        )
+        xml = handle_voice_request("sess-10", "+256700000000", "1", "0", "")
+        self.assertIn("Thank you", xml)
+        session = VoiceSession.objects.get(session_id="sess-10")
+        self.assertFalse(session.is_active)
+
+    def test_empty_transcript_offers_one_retry_then_gives_up(self):
+        handle_voice_request("sess-11", "+256700000000", "1", "", "")
+        with self._mock_transcript(None):
+            first = handle_voice_request(
+                "sess-11", "+256700000000", "1", "", "https://example.com/r.mp3"
+            )
+            second = handle_voice_request(
+                "sess-11", "+256700000000", "1", "", "https://example.com/r2.mp3"
+            )
+        self.assertIn("<Record", first)
+        self.assertNotIn("<Record", second)
+        session = VoiceSession.objects.get(session_id="sess-11")
+        self.assertFalse(session.is_active)
+
+    def test_hangup_marks_session_inactive_and_returns_empty(self):
+        handle_voice_request("sess-12", "+256700000000", "1", "", "")
+        xml = handle_voice_request("sess-12", "+256700000000", "0", "", "")
+        self.assertEqual(xml, "")
+        session = VoiceSession.objects.get(session_id="sess-12")
+        self.assertFalse(session.is_active)
+
+    def test_sixth_call_from_same_number_in_one_minute_is_rate_limited(self):
+        for i in range(5):
+            handle_voice_request(f"sess-rl-{i}", "+256799999999", "1", "", "")
+        xml = handle_voice_request("sess-rl-5", "+256799999999", "1", "", "")
+        self.assertIn("Thank you", xml)
+        self.assertFalse(
+            VoiceSession.objects.filter(session_id="sess-rl-5").exists()
+        )
