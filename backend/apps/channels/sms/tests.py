@@ -11,6 +11,8 @@ from apps.channels.models import SmsContext
 from apps.channels.sms import ai_classifier, handler
 from apps.channels.sms.handler import handle_sms_request
 from apps.channels.sms.keywords import (
+    match_consent_no,
+    match_consent_yes,
     match_danger,
     match_discreet,
     match_followup,
@@ -28,6 +30,12 @@ from apps.rights.models import (
 )
 from apps.rights.services import get_situation_detail
 from apps.support.models import SupportService
+from apps.partners.models import (
+    PartnerOrganisation,
+    PartnerServiceConfiguration,
+    PartnerVerificationRequest,
+)
+from apps.referrals.models import Referral
 from apps.channels.sms import templates
 
 
@@ -103,6 +111,19 @@ class SmsContextModelTests(TestCase):
         self.assertEqual(context.language, "en")
         self.assertEqual(context.last_situation_slug, "")
 
+    def test_pending_referral_step_defaults_to_blank(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000002",
+        )
+        self.assertEqual(context.pending_referral_step, "")
+
+    def test_pending_referral_step_can_be_set(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000003",
+            pending_referral_step="consent",
+        )
+        self.assertEqual(context.pending_referral_step, "consent")
+
 
 class MatchNotSafeAnswerTests(TestCase):
     def test_matches_no(self):
@@ -146,6 +167,29 @@ class MatchNotSafeAnswerTests(TestCase):
 
     def test_does_not_false_positive_on_info(self):
         self.assertFalse(match_not_safe_answer("send me more info please"))
+
+
+class MatchConsentTests(TestCase):
+    def test_match_consent_yes_matches_bare_yes(self):
+        self.assertTrue(match_consent_yes("yes"))
+
+    def test_match_consent_yes_matches_yes_in_sentence(self):
+        self.assertTrue(match_consent_yes("yes please connect me"))
+
+    def test_match_consent_yes_matches_short_form(self):
+        self.assertTrue(match_consent_yes("y"))
+
+    def test_match_consent_yes_false_for_no(self):
+        self.assertFalse(match_consent_yes("no"))
+
+    def test_match_consent_no_matches_bare_no(self):
+        self.assertTrue(match_consent_no("no"))
+
+    def test_match_consent_no_matches_short_form(self):
+        self.assertTrue(match_consent_no("n"))
+
+    def test_match_consent_no_false_for_yes(self):
+        self.assertFalse(match_consent_no("yes"))
 
 
 class KeywordMatchingTests(TestCase):
@@ -423,6 +467,44 @@ class FixedReplyTests(TestCase):
 
     def test_build_followup_expired_reply(self):
         self.assertIn("STEPS", templates.build_followup_expired_reply())
+
+
+class ReferralTemplateTests(TestCase):
+    def test_build_referral_consent_prompt(self):
+        self.assertEqual(
+            templates.build_referral_consent_prompt(),
+            templates.REFERRAL_CONSENT_PROMPT,
+        )
+
+    def test_build_referral_district_prompt(self):
+        self.assertEqual(
+            templates.build_referral_district_prompt(),
+            templates.REFERRAL_DISTRICT_PROMPT,
+        )
+
+    def test_build_referral_confirmation_reply(self):
+        service = SupportService.objects.create(
+            name="Referral Template Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+        referral = Referral.objects.create(
+            reference="SY-REF-TEMPLATE-TEST",
+            organisation=organisation,
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        message = templates.build_referral_confirmation_reply(referral)
+
+        self.assertIn("Referral Template Test Partner", message)
+        self.assertIn("SY-REF-TEMPLATE-TEST", message)
 
 
 @override_settings(LLM_API_KEY="")
@@ -1177,3 +1259,240 @@ class SafetyCheckinTests(TestCase):
         self.assertGreater(
             context.updated_at, timezone.now() - timedelta(minutes=1)
         )
+
+
+class ReferralConsentFlowTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.situation = _create_problem_at_work_situation()
+
+        RightsTopic.objects.filter(slug="workplace-rights").update(
+            rights_category="work-employment",
+        )
+
+        service = SupportService.objects.create(
+            name="Referral Flow Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+        self.organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+            is_test=False,
+        )
+        PartnerServiceConfiguration.objects.create(
+            organisation=self.organisation,
+            rights_categories=["work-employment"],
+            languages=["English"],
+            support_channels=["phone"],
+            districts_served=["Kampala"],
+            accepting_referrals=True,
+        )
+        PartnerVerificationRequest.objects.create(
+            organisation=self.organisation,
+            status="verified",
+        )
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_support_on_standard_situation_sends_consent_prompt(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000", last_situation_slug="problem-at-work"
+        )
+        handle_sms_request("+256700000000", "SUPPORT")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.REFERRAL_CONSENT_PROMPT)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "consent")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_consent_yes_sends_district_prompt(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="consent",
+        )
+        handle_sms_request("+256700000000", "yes")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.REFERRAL_DISTRICT_PROMPT)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "district")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_consent_no_falls_back_to_raw_support_reply(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="consent",
+        )
+        handle_sms_request("+256700000000", "no")
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.REFERRAL_DISTRICT_PROMPT)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_consent_unrecognized_falls_back_to_raw_support_reply(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="consent",
+        )
+        handle_sms_request("+256700000000", "maybe later")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_district_match_sends_confirmation_and_creates_referral(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+            language="en",
+        )
+        handle_sms_request("+256700000000", "Kampala")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Referral Flow Test Partner", message)
+        self.assertIn("SY-REF-", message)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+
+        referral = Referral.objects.get(organisation=self.organisation)
+        self.assertEqual(referral.contact_phone, "+256700000000")
+        self.assertEqual(referral.district, "Kampala")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_lowercase_district_still_matches_and_creates_referral(self, mock_send):
+        # Citizens type districts freehand over SMS; find_matching_organisations
+        # matches districts_served exactly and case-sensitively, so the handler
+        # normalises to the canonical Title-Case vocabulary before matching.
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+            language="en",
+        )
+        handle_sms_request("+256700000000", "kampala")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Referral Flow Test Partner", message)
+        self.assertIn("SY-REF-", message)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+
+        referral = Referral.objects.get(organisation=self.organisation)
+        self.assertEqual(referral.contact_phone, "+256700000000")
+        self.assertEqual(referral.district, "Kampala")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_send_failure_after_referral_creation_still_clears_pending_step(
+        self, mock_send
+    ):
+        # send_sms raises on failure and the webhook view swallows it, so the
+        # pending step must already be cleared by the time the confirmation
+        # send is attempted - otherwise the citizen's natural retry would
+        # re-enter the district branch and create a duplicate Referral.
+        mock_send.side_effect = Exception("simulated AT API failure")
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+            language="en",
+        )
+
+        with self.assertRaises(Exception) as raised:
+            handle_sms_request("+256700000000", "Kampala")
+        self.assertEqual(str(raised.exception), "simulated AT API failure")
+
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+        self.assertEqual(Referral.objects.count(), 1)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_district_no_match_falls_back_to_raw_support_reply(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+            language="en",
+        )
+        handle_sms_request("+256700000000", "Gulu")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+        self.assertEqual(Referral.objects.count(), 0)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_high_risk_support_bypasses_consent_flow(self, mock_send):
+        _create_home_safety_situation()
+        SmsContext.objects.create(
+            phone_number="+256700000001", last_situation_slug="home-safety"
+        )
+        handle_sms_request("+256700000001", "SUPPORT")
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.REFERRAL_CONSENT_PROMPT)
+        context = SmsContext.objects.get(phone_number="+256700000001")
+        self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_discreet_support_bypasses_consent_flow(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000002",
+            last_situation_slug="problem-at-work",
+            discreet=True,
+        )
+        handle_sms_request("+256700000002", "SUPPORT")
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.REFERRAL_CONSENT_PROMPT)
+        context = SmsContext.objects.get(phone_number="+256700000002")
+        self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_danger_word_while_pending_referral_step_clears_it(self, mock_send):
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+        )
+        handle_sms_request("+256700000000", "there's a weapon here right now")
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_expired_context_clears_pending_referral_step(self, mock_send):
+        context = SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+        )
+        SmsContext.objects.filter(pk=context.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=11),
+        )
+        handle_sms_request("+256700000000", "Kampala")
+        message = mock_send.call_args[0][1]
+        self.assertEqual(message, templates.build_followup_expired_reply())
+        context.refresh_from_db()
+        self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_stale_pending_referral_step_does_not_swallow_next_situation_message(
+        self, mock_send, mock_reword
+    ):
+        # A message that arrives after a pending_referral_step has expired
+        # should still be handled by the normal matchers (match_situation
+        # here) instead of being preempted by the expired-followup reply -
+        # only the terminal unmatched-message fallback should ever send
+        # build_followup_expired_reply for a lapsed referral step.
+        mock_reword.return_value = None
+        context = SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+        )
+        SmsContext.objects.filter(pk=context.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=11),
+        )
+        handle_sms_request("+256700000000", "I was fired from my job")
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.build_followup_expired_reply())
+        self.assertIn("Identify the workplace issue", message)

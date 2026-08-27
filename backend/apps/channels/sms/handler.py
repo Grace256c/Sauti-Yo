@@ -6,6 +6,7 @@ from django.utils import timezone
 from apps.channels.africastalking_client import send_sms
 from apps.channels.models import SmsContext
 from apps.channels.sms import ai_classifier, keywords, templates
+from apps.referrals.services import create_citizen_referral
 from apps.rights.services import get_situation_detail
 
 FOLLOWUP_WINDOW_MINUTES = 10
@@ -51,10 +52,11 @@ def _compose_situation_reply(detail, mode, language="en"):
     return template_text
 
 
-def _clear_pending_safety_check(phone_number):
-    SmsContext.objects.filter(
-        phone_number=phone_number, pending_safety_check=True
-    ).update(pending_safety_check=False)
+def _clear_pending_flows(phone_number):
+    SmsContext.objects.filter(phone_number=phone_number).update(
+        pending_safety_check=False,
+        pending_referral_step="",
+    )
 
 
 def _resolve_pending_safety_check(phone_number, slug, discreet):
@@ -177,6 +179,59 @@ def _set_language(phone_number, language):
     )
 
 
+def _handle_referral_step(phone_number, context, text):
+    if context.pending_referral_step == "consent":
+        if keywords.match_consent_yes(text):
+            # Persist the state advance BEFORE sending: send_sms raises on
+            # failure and the webhook view swallows it, so a send failure
+            # must not leave a stale pending step behind.
+            SmsContext.objects.filter(phone_number=phone_number).update(
+                pending_referral_step="district",
+                updated_at=timezone.now(),
+            )
+            _send(phone_number, templates.build_referral_district_prompt())
+            return
+
+        detail = get_situation_detail(context.last_situation_slug)
+        mode = "discreet" if context.discreet else "normal"
+        SmsContext.objects.filter(phone_number=phone_number).update(
+            pending_referral_step="",
+            updated_at=timezone.now(),
+        )
+        _send(phone_number, templates.build_support_reply(detail, mode))
+        return
+
+    # Citizens type districts freehand over SMS; normalise to the canonical
+    # Title-Case vocabulary that find_matching_organisations matches exactly.
+    district = text.strip().title()
+    referral = create_citizen_referral(
+        phone_number=phone_number,
+        situation_slug=context.last_situation_slug,
+        district=district,
+        language=context.language,
+        origin_channel="sms",
+    )
+
+    detail = get_situation_detail(context.last_situation_slug)
+    mode = "discreet" if context.discreet else "normal"
+
+    # Clear the pending step BEFORE the reply goes out: the Referral row
+    # already exists, so a raising send must not leave the citizen able to
+    # retry into this branch and create a duplicate referral.
+    SmsContext.objects.filter(phone_number=phone_number).update(
+        pending_referral_step="",
+        updated_at=timezone.now(),
+    )
+
+    if referral is not None:
+        _send(
+            phone_number,
+            templates.build_referral_confirmation_reply(referral),
+        )
+    else:
+        _send(phone_number, templates.build_support_reply(detail, mode))
+
+
 def handle_sms_request(phone_number, text):
     if _is_rate_limited(phone_number):
         return
@@ -214,7 +269,16 @@ def handle_sms_request(phone_number, text):
                 language=language,
             ),
         )
-        _clear_pending_safety_check(phone_number)
+        _clear_pending_flows(phone_number)
+        return
+
+    raw_context = SmsContext.objects.filter(phone_number=phone_number).first()
+    had_pending_referral_step = bool(
+        raw_context and raw_context.pending_referral_step
+    )
+    referral_pending = _live_context(phone_number)
+    if referral_pending is not None and referral_pending.pending_referral_step:
+        _handle_referral_step(phone_number, referral_pending, text)
         return
 
     pending = _live_context(phone_number)
@@ -254,7 +318,14 @@ def handle_sms_request(phone_number, text):
             return
         mode = "discreet" if context.discreet else "normal"
         if followup == "support":
-            _send(phone_number, templates.build_support_reply(detail, mode))
+            if detail["risk_level"] == "high_risk" or context.discreet:
+                _send(phone_number, templates.build_support_reply(detail, mode))
+            else:
+                SmsContext.objects.filter(phone_number=phone_number).update(
+                    pending_referral_step="consent",
+                    updated_at=timezone.now(),
+                )
+                _send(phone_number, templates.build_referral_consent_prompt())
         else:
             _send(
                 phone_number,
@@ -275,7 +346,7 @@ def handle_sms_request(phone_number, text):
     if pending is not None and pending.pending_safety_check:
         detail = get_situation_detail(pending.last_situation_slug)
         if detail is None:
-            _clear_pending_safety_check(phone_number)
+            _clear_pending_flows(phone_number)
             _send(phone_number, templates.build_unmatched_reply(language))
             return
         mode = "discreet" if pending.discreet else "normal"
@@ -285,7 +356,10 @@ def handle_sms_request(phone_number, text):
         )
         return
 
-    _send(phone_number, templates.build_unmatched_reply(language))
+    if had_pending_referral_step:
+        _send(phone_number, templates.build_followup_expired_reply(language))
+    else:
+        _send(phone_number, templates.build_unmatched_reply(language))
 
 
 def _live_context(phone_number):
@@ -297,11 +371,13 @@ def _live_context(phone_number):
         context.last_situation_slug = ""
         context.discreet = False
         context.pending_safety_check = False
+        context.pending_referral_step = ""
         context.save(
             update_fields=[
                 "last_situation_slug",
                 "discreet",
                 "pending_safety_check",
+                "pending_referral_step",
             ]
         )
         return None
