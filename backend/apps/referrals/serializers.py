@@ -67,6 +67,7 @@ class ReferralSerializer(serializers.ModelSerializer):
             "summary",
             "district",
             "language",
+            "contact_phone",
             "preferred_support_channel",
             "status",
             "citizen_consent_to_share",
@@ -83,6 +84,7 @@ class ReferralSerializer(serializers.ModelSerializer):
         read_only_fields = [
             "id",
             "reference",
+            "contact_phone",
             "organisation_name",
             "rights_topic_title",
             "assigned_to_name",

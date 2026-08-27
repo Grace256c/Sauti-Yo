@@ -43,8 +43,23 @@ class RightsTopic(models.Model):
         ("archived", "Archived"),
     ]
 
+    RIGHTS_CATEGORY_CHOICES = [
+        ("work-employment", "Work & Employment"),
+        ("safety-protection", "Safety & Protection"),
+        ("land-housing", "Land & Housing"),
+        ("family-inheritance", "Family & Inheritance"),
+        ("public-services", "Public Services"),
+        ("community-discrimination", "Community & Discrimination"),
+    ]
+
     slug = models.SlugField(unique=True)
     title = models.CharField(max_length=150)
+
+    rights_category = models.CharField(
+        max_length=30,
+        choices=RIGHTS_CATEGORY_CHOICES,
+        blank=True,
+    )
 
     risk_level = models.CharField(
         max_length=20,

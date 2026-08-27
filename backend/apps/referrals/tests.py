@@ -335,6 +335,34 @@ class ReferralContactPhoneFieldTests(TestCase):
 
         self.assertEqual(referral.contact_phone, "+256700000000")
 
+    def test_contact_phone_is_exposed_by_referral_serializer(self):
+        from .serializers import ReferralSerializer
+
+        service = SupportService.objects.create(
+            name="Contact Phone Serializer Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+
+        referral = Referral.objects.create(
+            reference="SY-REF-SERIALIZER-TEST",
+            organisation=organisation,
+            contact_phone="+256700000009",
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        data = ReferralSerializer(referral).data
+
+        self.assertEqual(data["contact_phone"], "+256700000009")
+
 
 class ReferralGenerateReferenceTests(TestCase):
     def test_generate_reference_has_expected_prefix_and_length(self):
@@ -362,6 +390,7 @@ class CreateCitizenReferralServiceTests(TestCase):
             slug="eviction-housing",
             title="Eviction & Housing Rights",
             summary="Protections around eviction and housing.",
+            rights_category="land-housing",
             risk_level="standard",
         )
 
@@ -386,8 +415,8 @@ class CreateCitizenReferralServiceTests(TestCase):
 
         PartnerServiceConfiguration.objects.create(
             organisation=self.organisation,
-            rights_categories=["eviction-housing"],
-            languages=["en"],
+            rights_categories=["land-housing"],
+            languages=["English"],
             support_channels=["phone"],
             districts_served=["Kampala"],
             accepting_referrals=True,
@@ -412,7 +441,7 @@ class CreateCitizenReferralServiceTests(TestCase):
         self.assertEqual(referral.rights_topic, self.topic)
         self.assertEqual(referral.contact_phone, "+256700000001")
         self.assertEqual(referral.district, "Kampala")
-        self.assertEqual(referral.language, "en")
+        self.assertEqual(referral.language, "English")
         self.assertEqual(referral.preferred_support_channel, "phone")
         self.assertTrue(referral.citizen_consent_to_share)
         self.assertEqual(referral.status, "new")
@@ -443,6 +472,54 @@ class CreateCitizenReferralServiceTests(TestCase):
             language="en",
             origin_channel="sms",
         )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
+
+    def test_returns_none_when_topic_has_no_rights_category(self):
+        uncategorized_situation = Situation.objects.create(
+            slug="uncategorized-situation",
+            title="Uncategorized situation",
+            risk_level="standard",
+        )
+
+        uncategorized_topic = RightsTopic.objects.create(
+            slug="uncategorized-topic",
+            title="Uncategorized topic",
+            summary="A topic with no rights_category set.",
+            risk_level="standard",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=uncategorized_situation,
+            rights_topic=uncategorized_topic,
+        )
+
+        referral = create_citizen_referral(
+            phone_number="+256700000004",
+            situation_slug="uncategorized-situation",
+            district="Kampala",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
+
+    def test_referral_creation_failure_rolls_back_and_returns_none(self):
+        from unittest import mock
+
+        with mock.patch(
+            "apps.referrals.services.ReferralStatusHistory.objects.create",
+            side_effect=Exception("simulated history insert failure"),
+        ):
+            referral = create_citizen_referral(
+                phone_number="+256700000005",
+                situation_slug="facing-eviction",
+                district="Kampala",
+                language="en",
+                origin_channel="sms",
+            )
 
         self.assertIsNone(referral)
         self.assertEqual(Referral.objects.count(), 0)
