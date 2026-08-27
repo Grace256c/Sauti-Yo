@@ -5,6 +5,8 @@ from rest_framework.test import APIClient
 from apps.partners.models import (
     PartnerMember,
     PartnerOrganisation,
+    PartnerServiceConfiguration,
+    PartnerVerificationRequest,
 )
 from apps.support.models import SupportService
 
@@ -218,4 +220,62 @@ class ReferralAPITests(TestCase):
         self.assertEqual(
             self.referral.status,
             "new",
+        )
+
+
+class CitizenReferralTestOrganisationTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        service = SupportService.objects.create(
+            name="Citizen Referral Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        self.organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+            is_test=True,
+        )
+
+        PartnerServiceConfiguration.objects.create(
+            organisation=self.organisation,
+            rights_categories=["work-employment"],
+            languages=["English"],
+            support_channels=["phone"],
+            districts_served=["Kampala"],
+            accepting_referrals=True,
+        )
+
+        PartnerVerificationRequest.objects.create(
+            organisation=self.organisation,
+            status="verified",
+        )
+
+    def test_test_partner_cannot_receive_citizen_referral(self):
+        response = self.client.post(
+            "/api/referrals/citizen/create/",
+            {
+                "organisation": self.organisation.id,
+                "rights_topic": None,
+                "summary": "Citizen needs legal assistance.",
+                "district": "Kampala",
+                "language": "English",
+                "preferred_support_channel": "phone",
+                "citizen_consent_to_share": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(
+            response.status_code,
+            400,
+        )
+
+        self.assertEqual(
+            Referral.objects.count(),
+            0,
         )
