@@ -1426,3 +1426,27 @@ class ReferralConsentFlowTests(TestCase):
         self.assertEqual(message, templates.build_followup_expired_reply())
         context.refresh_from_db()
         self.assertEqual(context.pending_referral_step, "")
+
+    @patch("apps.channels.sms.handler.ai_classifier.reword_reply")
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_stale_pending_referral_step_does_not_swallow_next_situation_message(
+        self, mock_send, mock_reword
+    ):
+        # A message that arrives after a pending_referral_step has expired
+        # should still be handled by the normal matchers (match_situation
+        # here) instead of being preempted by the expired-followup reply -
+        # only the terminal unmatched-message fallback should ever send
+        # build_followup_expired_reply for a lapsed referral step.
+        mock_reword.return_value = None
+        context = SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+        )
+        SmsContext.objects.filter(pk=context.pk).update(
+            updated_at=timezone.now() - timedelta(minutes=11),
+        )
+        handle_sms_request("+256700000000", "I was fired from my job")
+        message = mock_send.call_args[0][1]
+        self.assertNotEqual(message, templates.build_followup_expired_reply())
+        self.assertIn("Identify the workplace issue", message)

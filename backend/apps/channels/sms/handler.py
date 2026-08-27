@@ -185,6 +185,7 @@ def _handle_referral_step(phone_number, context, text):
             _send(phone_number, templates.build_referral_district_prompt())
             SmsContext.objects.filter(phone_number=phone_number).update(
                 pending_referral_step="district",
+                updated_at=timezone.now(),
             )
             return
 
@@ -193,6 +194,7 @@ def _handle_referral_step(phone_number, context, text):
         _send(phone_number, templates.build_support_reply(detail, mode))
         SmsContext.objects.filter(phone_number=phone_number).update(
             pending_referral_step="",
+            updated_at=timezone.now(),
         )
         return
 
@@ -218,6 +220,7 @@ def _handle_referral_step(phone_number, context, text):
 
     SmsContext.objects.filter(phone_number=phone_number).update(
         pending_referral_step="",
+        updated_at=timezone.now(),
     )
 
 
@@ -269,15 +272,6 @@ def handle_sms_request(phone_number, text):
     if referral_pending is not None and referral_pending.pending_referral_step:
         _handle_referral_step(phone_number, referral_pending, text)
         return
-    if had_pending_referral_step and referral_pending is None:
-        # The consent/district exchange was still pending, but the
-        # 10-minute follow-up window lapsed before the citizen replied
-        # (_live_context already cleared pending_referral_step above) -
-        # tell them the window expired rather than silently reinterpreting
-        # their reply (e.g. a bare district name like "Kampala") as an
-        # unmatched message.
-        _send(phone_number, templates.build_followup_expired_reply(language))
-        return
 
     pending = _live_context(phone_number)
     if pending is not None and pending.pending_safety_check:
@@ -322,6 +316,7 @@ def handle_sms_request(phone_number, text):
                 _send(phone_number, templates.build_referral_consent_prompt())
                 SmsContext.objects.filter(phone_number=phone_number).update(
                     pending_referral_step="consent",
+                    updated_at=timezone.now(),
                 )
         else:
             _send(
@@ -353,7 +348,10 @@ def handle_sms_request(phone_number, text):
         )
         return
 
-    _send(phone_number, templates.build_unmatched_reply(language))
+    if had_pending_referral_step:
+        _send(phone_number, templates.build_followup_expired_reply(language))
+    else:
+        _send(phone_number, templates.build_unmatched_reply(language))
 
 
 def _live_context(phone_number):
