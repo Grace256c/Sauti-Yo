@@ -294,3 +294,73 @@ class PublicPartnerMatchTests(TestCase):
             organisation.id,
             ids,
         )
+
+
+from apps.partners.services import find_matching_organisations
+
+
+class FindMatchingOrganisationsServiceTests(TestCase):
+    def setUp(self):
+        service = SupportService.objects.create(
+            name="Service Layer Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        self.organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+            is_test=False,
+        )
+
+        PartnerServiceConfiguration.objects.create(
+            organisation=self.organisation,
+            rights_categories=["work-employment"],
+            languages=["English"],
+            support_channels=["phone"],
+            districts_served=["Kampala"],
+            accepting_referrals=True,
+        )
+
+        PartnerVerificationRequest.objects.create(
+            organisation=self.organisation,
+            status="verified",
+        )
+
+    def test_matching_organisation_is_returned_and_scored(self):
+        matches = find_matching_organisations(
+            category="work-employment",
+            district="Kampala",
+            language="English",
+            channel="phone",
+        )
+
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["id"], self.organisation.id)
+        self.assertEqual(matches[0]["score"], 90)
+
+    def test_non_matching_category_is_excluded(self):
+        matches = find_matching_organisations(
+            category="eviction-housing",
+            district="Kampala",
+            language="English",
+            channel="phone",
+        )
+
+        self.assertEqual(matches, [])
+
+    def test_in_person_channel_alias_is_normalized(self):
+        PartnerServiceConfiguration.objects.filter(
+            organisation=self.organisation,
+        ).update(support_channels=["in_person"])
+
+        matches = find_matching_organisations(
+            category="work-employment",
+            district="Kampala",
+            language="English",
+            channel="in-person",
+        )
+
+        self.assertEqual(len(matches), 1)
