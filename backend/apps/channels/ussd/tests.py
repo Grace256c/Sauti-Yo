@@ -193,6 +193,7 @@ class LanguageSelectTests(TestCase):
         text, ended = menus.render_language_select(session)
         self.assertIn("Welcome to Sauti Yo", text)
         self.assertIn("1. English", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_shows_unavailable_notice_when_flagged(self):
@@ -204,6 +205,7 @@ class LanguageSelectTests(TestCase):
         text, ended = menus.render_language_select(session)
         self.assertIn("not available yet", text)
         self.assertIn("1. English", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_transition_english_sets_language_and_moves_to_main_menu(self):

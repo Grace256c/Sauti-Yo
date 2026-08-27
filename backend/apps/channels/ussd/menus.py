@@ -121,11 +121,12 @@ def paginate_items(items, page, page_size=PAGE_SIZE):
 def render_language_select(session):
     body = get_copy("ussd.welcome", session.language)
     prompt = get_copy("ussd.language_prompt", session.language)
+    exit_line = f"0. {get_copy('ussd.exit', session.language)}"
     if session.context.get("unavailable_notice"):
         requested = session.context.get("requested_language", session.language)
         notice = get_copy("ussd.language_unavailable", requested)
-        return f"{notice}\n\n{body}\n{prompt}", False
-    return f"{body}\n{prompt}", False
+        return f"{notice}\n\n{body}\n{prompt}\n{exit_line}", False
+    return f"{body}\n{prompt}\n{exit_line}", False
 
 
 def transition_language_select(session, user_input):
