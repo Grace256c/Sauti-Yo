@@ -328,3 +328,17 @@ class ReferralContactPhoneFieldTests(TestCase):
         )
 
         self.assertEqual(referral.contact_phone, "+256700000000")
+
+
+class ReferralGenerateReferenceTests(TestCase):
+    def test_generate_reference_has_expected_prefix_and_length(self):
+        reference = Referral.generate_reference()
+
+        self.assertTrue(reference.startswith("SY-REF-"))
+        self.assertEqual(len(reference), len("SY-REF-") + 32)
+
+    def test_generate_reference_is_unique_across_calls(self):
+        first = Referral.generate_reference()
+        second = Referral.generate_reference()
+
+        self.assertNotEqual(first, second)
