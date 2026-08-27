@@ -2,6 +2,7 @@ import { Outlet } from "react-router-dom";
 
 import Header from "./Header";
 import Footer from "./Footer";
+import ChatWidget from "../chat/chatwidget";
 
 export default function AppShell() {
   return (
@@ -13,6 +14,8 @@ export default function AppShell() {
       </main>
 
       <Footer />
+
+      <ChatWidget />
     </div>
   );
 }
