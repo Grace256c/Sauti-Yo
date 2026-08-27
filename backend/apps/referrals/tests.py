@@ -9,11 +9,17 @@ from apps.partners.models import (
     PartnerVerificationRequest,
 )
 from apps.support.models import SupportService
+from apps.rights.models import (
+    RightsTopic,
+    Situation,
+    SituationRightsTopic,
+)
 
 from .models import (
     Referral,
     ReferralStatusHistory,
 )
+from .services import create_citizen_referral
 
 
 User = get_user_model()
@@ -279,3 +285,241 @@ class CitizenReferralTestOrganisationTests(TestCase):
             Referral.objects.count(),
             0,
         )
+
+
+class ReferralContactPhoneFieldTests(TestCase):
+    def test_contact_phone_defaults_to_blank(self):
+        service = SupportService.objects.create(
+            name="Contact Phone Field Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+
+        referral = Referral.objects.create(
+            reference="SY-REF-CONTACT-PHONE-TEST",
+            organisation=organisation,
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        self.assertEqual(referral.contact_phone, "")
+
+    def test_contact_phone_can_be_set(self):
+        service = SupportService.objects.create(
+            name="Contact Phone Field Test Partner Two",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+
+        referral = Referral.objects.create(
+            reference="SY-REF-CONTACT-PHONE-TEST-2",
+            organisation=organisation,
+            contact_phone="+256700000000",
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        self.assertEqual(referral.contact_phone, "+256700000000")
+
+    def test_contact_phone_is_exposed_by_referral_serializer(self):
+        from .serializers import ReferralSerializer
+
+        service = SupportService.objects.create(
+            name="Contact Phone Serializer Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+
+        referral = Referral.objects.create(
+            reference="SY-REF-SERIALIZER-TEST",
+            organisation=organisation,
+            contact_phone="+256700000009",
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        data = ReferralSerializer(referral).data
+
+        self.assertEqual(data["contact_phone"], "+256700000009")
+
+
+class ReferralGenerateReferenceTests(TestCase):
+    def test_generate_reference_has_expected_prefix_and_length(self):
+        reference = Referral.generate_reference()
+
+        self.assertTrue(reference.startswith("SY-REF-"))
+        self.assertEqual(len(reference), len("SY-REF-") + 32)
+
+    def test_generate_reference_is_unique_across_calls(self):
+        first = Referral.generate_reference()
+        second = Referral.generate_reference()
+
+        self.assertNotEqual(first, second)
+
+
+class CreateCitizenReferralServiceTests(TestCase):
+    def setUp(self):
+        self.situation = Situation.objects.create(
+            slug="facing-eviction",
+            title="Facing eviction",
+            risk_level="standard",
+        )
+
+        self.topic = RightsTopic.objects.create(
+            slug="eviction-housing",
+            title="Eviction & Housing Rights",
+            summary="Protections around eviction and housing.",
+            rights_category="land-housing",
+            risk_level="standard",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=self.situation,
+            rights_topic=self.topic,
+        )
+
+        service = SupportService.objects.create(
+            name="Eviction Referral Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        self.organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+            is_test=False,
+        )
+
+        PartnerServiceConfiguration.objects.create(
+            organisation=self.organisation,
+            rights_categories=["land-housing"],
+            languages=["English"],
+            support_channels=["phone"],
+            districts_served=["Kampala"],
+            accepting_referrals=True,
+        )
+
+        PartnerVerificationRequest.objects.create(
+            organisation=self.organisation,
+            status="verified",
+        )
+
+    def test_creates_referral_when_organisation_matches(self):
+        referral = create_citizen_referral(
+            phone_number="+256700000001",
+            situation_slug="facing-eviction",
+            district="Kampala",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNotNone(referral)
+        self.assertEqual(referral.organisation, self.organisation)
+        self.assertEqual(referral.rights_topic, self.topic)
+        self.assertEqual(referral.contact_phone, "+256700000001")
+        self.assertEqual(referral.district, "Kampala")
+        self.assertEqual(referral.language, "English")
+        self.assertEqual(referral.preferred_support_channel, "phone")
+        self.assertTrue(referral.citizen_consent_to_share)
+        self.assertEqual(referral.status, "new")
+        self.assertTrue(referral.reference.startswith("SY-REF-"))
+        self.assertIn("Facing eviction", referral.summary)
+
+        history = referral.status_history.get()
+        self.assertEqual(history.to_status, "new")
+        self.assertIn("sms", history.note)
+
+    def test_returns_none_when_no_organisation_matches(self):
+        referral = create_citizen_referral(
+            phone_number="+256700000002",
+            situation_slug="facing-eviction",
+            district="Gulu",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
+
+    def test_returns_none_for_unknown_situation(self):
+        referral = create_citizen_referral(
+            phone_number="+256700000003",
+            situation_slug="does-not-exist",
+            district="Kampala",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
+
+    def test_returns_none_when_topic_has_no_rights_category(self):
+        uncategorized_situation = Situation.objects.create(
+            slug="uncategorized-situation",
+            title="Uncategorized situation",
+            risk_level="standard",
+        )
+
+        uncategorized_topic = RightsTopic.objects.create(
+            slug="uncategorized-topic",
+            title="Uncategorized topic",
+            summary="A topic with no rights_category set.",
+            risk_level="standard",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=uncategorized_situation,
+            rights_topic=uncategorized_topic,
+        )
+
+        referral = create_citizen_referral(
+            phone_number="+256700000004",
+            situation_slug="uncategorized-situation",
+            district="Kampala",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
+
+    def test_referral_creation_failure_rolls_back_and_returns_none(self):
+        from unittest import mock
+
+        with mock.patch(
+            "apps.referrals.services.ReferralStatusHistory.objects.create",
+            side_effect=Exception("simulated history insert failure"),
+        ):
+            referral = create_citizen_referral(
+                phone_number="+256700000005",
+                situation_slug="facing-eviction",
+                district="Kampala",
+                language="en",
+                origin_channel="sms",
+            )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)

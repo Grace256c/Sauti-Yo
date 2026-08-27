@@ -135,6 +135,7 @@ class Command(BaseCommand):
                     "review relevant rights information, and identify "
                     "possible next steps."
                 ),
+                "rights_category": "work-employment",
                 "risk_level": "standard",
                 "source_name": "Employment Act, 2006 (Cap 226), Laws of Uganda",
                 "source_url": (
@@ -214,6 +215,7 @@ class Command(BaseCommand):
                     "lawful process. If you're evicted unlawfully, you "
                     "have a right to seek relief."
                 ),
+                "rights_category": "land-housing",
                 "risk_level": "standard",
                 "source_name": (
                     "Landlord and Tenant Act, 2022 (Chapter 238), "
@@ -303,6 +305,7 @@ class Command(BaseCommand):
                     "without them being present, and courts can order "
                     "an abuser to leave the home."
                 ),
+                "rights_category": "safety-protection",
                 "risk_level": "high_risk",
                 "source_name": (
                     "Domestic Violence Act, 2010 (Act No. 3 of 2010), "
@@ -407,6 +410,7 @@ class Command(BaseCommand):
                     "report confidentially, including to a Labour "
                     "Officer."
                 ),
+                "rights_category": "safety-protection",
                 "risk_level": "sensitive",
                 "source_name": (
                     "Employment Act, 2006, section 6. Also see Employment "

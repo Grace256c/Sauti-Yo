@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.db import models
 
@@ -48,6 +50,11 @@ class Referral(models.Model):
 
     district = models.CharField(
         max_length=100,
+        blank=True,
+    )
+
+    contact_phone = models.CharField(
+        max_length=50,
         blank=True,
     )
 
@@ -117,6 +124,10 @@ class Referral(models.Model):
 
     def __str__(self):
         return f"{self.reference} — {self.organisation}"
+
+    @staticmethod
+    def generate_reference():
+        return f"SY-REF-{uuid.uuid4().hex.upper()}"
 
 
 class ReferralStatusHistory(models.Model):

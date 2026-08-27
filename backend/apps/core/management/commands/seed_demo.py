@@ -176,6 +176,7 @@ class Command(BaseCommand):
             slug="domestic-violence-rights",
             defaults={
                 "title": "Domestic Violence & Your Rights",
+                "rights_category": "safety-protection",
                 "risk_level": "high_risk",
                 "summary": (
                     "The Domestic Violence Act protects you from "
@@ -281,6 +282,7 @@ class Command(BaseCommand):
             slug="matrimonial-property-rights",
             defaults={
                 "title": "Property Rights After Separation",
+                "rights_category": "family-inheritance",
                 "risk_level": "standard",
                 "summary": (
                     "Under the Succession Act, a wife - including in "

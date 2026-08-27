@@ -1,4 +1,3 @@
-from uuid import uuid4
 from django.db import transaction
 from django.utils import timezone
 
@@ -168,7 +167,7 @@ class ReferralCreateAPIView(APIView):
             )
 
         referral = serializer.save(
-            reference=self._generate_reference(),
+            reference=Referral.generate_reference(),
             status="new",
             shared_at=timezone.now(),
         )
@@ -191,11 +190,6 @@ class ReferralCreateAPIView(APIView):
         return Response(
             output.data,
             status=status.HTTP_201_CREATED,
-        )
-
-    def _generate_reference(self):
-        return (
-            f"SY-REF-{uuid4().hex.upper()}"
         )
 
 
@@ -468,7 +462,7 @@ class CitizenReferralCreateAPIView(APIView):
             )
 
         referral = serializer.save(
-            reference=self._generate_reference(),
+            reference=Referral.generate_reference(),
             status="new",
             shared_at=timezone.now(),
         )
@@ -491,9 +485,4 @@ class CitizenReferralCreateAPIView(APIView):
         return Response(
             output.data,
             status=status.HTTP_201_CREATED,
-        )
-
-    def _generate_reference(self):
-        return (
-            f"SY-REF-{uuid4().hex.upper()}"
         )
