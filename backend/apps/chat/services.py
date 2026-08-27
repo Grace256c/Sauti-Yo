@@ -11,6 +11,7 @@ from apps.rights.services import get_situation_detail
 
 SLUG_ALIASES = {
     "land-property": "facing-eviction",
+    "home-safety": "domestic-violence",
 }
 
 SUPPORTED_LANGUAGES = {
