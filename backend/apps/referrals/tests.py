@@ -279,3 +279,52 @@ class CitizenReferralTestOrganisationTests(TestCase):
             Referral.objects.count(),
             0,
         )
+
+
+class ReferralContactPhoneFieldTests(TestCase):
+    def test_contact_phone_defaults_to_blank(self):
+        service = SupportService.objects.create(
+            name="Contact Phone Field Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+
+        referral = Referral.objects.create(
+            reference="SY-REF-CONTACT-PHONE-TEST",
+            organisation=organisation,
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        self.assertEqual(referral.contact_phone, "")
+
+    def test_contact_phone_can_be_set(self):
+        service = SupportService.objects.create(
+            name="Contact Phone Field Test Partner Two",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+
+        referral = Referral.objects.create(
+            reference="SY-REF-CONTACT-PHONE-TEST-2",
+            organisation=organisation,
+            contact_phone="+256700000000",
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        self.assertEqual(referral.contact_phone, "+256700000000")

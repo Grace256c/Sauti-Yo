@@ -51,6 +51,11 @@ class Referral(models.Model):
         blank=True,
     )
 
+    contact_phone = models.CharField(
+        max_length=50,
+        blank=True,
+    )
+
     language = models.CharField(
         max_length=100,
         blank=True,
