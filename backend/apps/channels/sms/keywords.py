@@ -77,3 +77,34 @@ def match_not_safe_answer(text):
     if re.search(r"\bno\b", normalized):
         return True
     return any(phrase in normalized for phrase in NOT_SAFE_ANSWER_PHRASES)
+
+
+LANGUAGE_COMMANDS = {
+    "en": {"en", "eng", "english"},
+    "lg": {"lg", "lug", "luganda"},
+    "sw": {"sw", "swa", "kiswahili", "swahili"},
+    "nyn": {"nyn", "runyankole"},
+}
+
+
+def match_language_command(text):
+    normalized = _normalize(text)
+
+    if normalized in {"lang", "language"}:
+        return "menu"
+
+    match = re.fullmatch(
+        r"(?:lang|language)\s+([a-z]+)",
+        normalized,
+    )
+
+    if not match:
+        return None
+
+    requested = match.group(1)
+
+    for code, aliases in LANGUAGE_COMMANDS.items():
+        if requested in aliases:
+            return code
+
+    return "menu"

@@ -14,6 +14,7 @@ i18n.use(initReactI18next).init({
     nyn: { translation: nyn },
   },
 
+  // Web is intentionally English-only for this MVP.
   lng: "en",
   fallbackLng: "en",
 
@@ -21,5 +22,9 @@ i18n.use(initReactI18next).init({
     escapeValue: false,
   },
 });
+
+if (typeof document !== "undefined") {
+  document.documentElement.lang = "en";
+}
 
 export default i18n;

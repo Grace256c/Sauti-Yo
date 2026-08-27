@@ -128,16 +128,20 @@ def render_language_select(session):
 
 
 def transition_language_select(session, user_input):
-    mapping = {"1": "en", "2": "lg", "3": "sw", "4": "nyn"}
+    mapping = {
+        "1": "en",
+        "2": "lg",
+        "3": "sw",
+        "4": "nyn",
+    }
+
     language = mapping.get(user_input)
+
     if language is None:
         return None
-    if language != "en":
-        return "language_select", {
-            "unavailable_notice": True,
-            "requested_language": language,
-        }
+
     session.language = language
+
     return "main_menu", {}
 
 

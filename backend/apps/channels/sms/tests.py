@@ -15,6 +15,7 @@ from apps.channels.sms.keywords import (
     match_discreet,
     match_followup,
     match_help,
+    match_language_command,
     match_not_safe_answer,
     match_situation,
 )
@@ -93,6 +94,14 @@ class SmsContextModelTests(TestCase):
             phone_number="+256700000000", last_situation_slug="home-safety"
         )
         self.assertFalse(context.pending_safety_check)
+
+
+    def test_language_defaults_to_english(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000001",
+        )
+        self.assertEqual(context.language, "en")
+        self.assertEqual(context.last_situation_slug, "")
 
 
 class MatchNotSafeAnswerTests(TestCase):
@@ -271,6 +280,38 @@ def _create_problem_at_work_situation():
         ),
     )
     return situation
+
+
+    def test_match_language_menu(self):
+        self.assertEqual(
+            match_language_command("LANG"),
+            "menu",
+        )
+
+    def test_match_luganda_language(self):
+        self.assertEqual(
+            match_language_command("LANG LG"),
+            "lg",
+        )
+
+    def test_match_kiswahili_language(self):
+        self.assertEqual(
+            match_language_command("language kiswahili"),
+            "sw",
+        )
+
+    def test_match_runyankole_language(self):
+        self.assertEqual(
+            match_language_command("LANG NYN"),
+            "nyn",
+        )
+
+    def test_match_language_command_ignores_normal_text(self):
+        self.assertIsNone(
+            match_language_command(
+                "I have a problem at work"
+            )
+        )
 
 
 class BuildSituationReplyTests(TestCase):
@@ -560,6 +601,160 @@ class HandleSmsRequestTests(TestCase):
         mock_send.reset_mock()
         handle_sms_request("+256700000000", "hello")
         mock_send.assert_not_called()
+
+
+class SmsLanguageTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_lang_command_shows_language_menu(
+        self,
+        mock_send,
+    ):
+        handle_sms_request(
+            "+256700001001",
+            "LANG",
+        )
+
+        message = mock_send.call_args.args[1]
+
+        self.assertIn("LANG EN", message)
+        self.assertIn("LANG LG", message)
+        self.assertIn("LANG SW", message)
+        self.assertIn("LANG NYN", message)
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_luganda_selection_is_persisted(
+        self,
+        mock_send,
+    ):
+        phone = "+256700001002"
+
+        handle_sms_request(
+            phone,
+            "LANG LG",
+        )
+
+        context = SmsContext.objects.get(
+            phone_number=phone,
+        )
+
+        self.assertEqual(context.language, "lg")
+        self.assertIn(
+            "Luganda",
+            mock_send.call_args.args[1],
+        )
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_kiswahili_selection_is_persisted(
+        self,
+        mock_send,
+    ):
+        phone = "+256700001003"
+
+        handle_sms_request(
+            phone,
+            "LANG SW",
+        )
+
+        context = SmsContext.objects.get(
+            phone_number=phone,
+        )
+
+        self.assertEqual(context.language, "sw")
+        self.assertIn(
+            "Kiswahili",
+            mock_send.call_args.args[1],
+        )
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_runyankole_selection_is_persisted(
+        self,
+        mock_send,
+    ):
+        phone = "+256700001004"
+
+        handle_sms_request(
+            phone,
+            "LANG NYN",
+        )
+
+        context = SmsContext.objects.get(
+            phone_number=phone,
+        )
+
+        self.assertEqual(context.language, "nyn")
+        self.assertIn(
+            "Runyankole",
+            mock_send.call_args.args[1],
+        )
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_language_survives_expired_situation_context(
+        self,
+        mock_send,
+    ):
+        phone = "+256700001005"
+
+        context = SmsContext.objects.create(
+            phone_number=phone,
+            last_situation_slug="problem-at-work",
+            language="lg",
+        )
+
+        SmsContext.objects.filter(
+            pk=context.pk,
+        ).update(
+            updated_at=timezone.now()
+            - timedelta(minutes=20)
+        )
+
+        handle_sms_request(
+            phone,
+            "something unmatched",
+        )
+
+        context.refresh_from_db()
+
+        self.assertEqual(context.language, "lg")
+        self.assertEqual(
+            context.last_situation_slug,
+            "",
+        )
+
+        self.assertIn(
+            "Wandiika",
+            mock_send.call_args.args[1],
+        )
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_can_switch_back_to_english(
+        self,
+        mock_send,
+    ):
+        phone = "+256700001006"
+
+        SmsContext.objects.create(
+            phone_number=phone,
+            language="lg",
+        )
+
+        handle_sms_request(
+            phone,
+            "LANG EN",
+        )
+
+        context = SmsContext.objects.get(
+            phone_number=phone,
+        )
+
+        self.assertEqual(context.language, "en")
+
+        self.assertIn(
+            "Language set to English",
+            mock_send.call_args.args[1],
+        )
 
 
 class SmsCallbackViewTests(TestCase):
