@@ -13,7 +13,42 @@ from .models import (
 )
 
 
+def get_requested_language(serializer):
+    """
+    Read ?lang=xx from the current API request.
+
+    Supported examples:
+    ?lang=en
+    ?lang=lg
+    ?lang=sw
+    ?lang=nyn
+
+    English is used as the default.
+    """
+    request = serializer.context.get("request")
+
+    if not request:
+        return "en"
+
+    language = request.query_params.get("lang", "en")
+
+    supported_languages = {
+        "en",
+        "lg",
+        "sw",
+        "nyn",
+    }
+
+    if language not in supported_languages:
+        return "en"
+
+    return language
+
+
 class ActionStepSerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    description = serializers.SerializerMethodField()
+
     class Meta:
         model = ActionStep
         fields = [
@@ -25,10 +60,42 @@ class ActionStepSerializer(serializers.ModelSerializer):
             "is_active",
         ]
 
+    def get_title(self, obj):
+        language = get_requested_language(self)
+
+        if language == "en":
+            return obj.title
+
+        translation = obj.translations.filter(
+            language=language
+        ).first()
+
+        if translation:
+            return translation.title
+
+        return obj.title
+
+    def get_description(self, obj):
+        language = get_requested_language(self)
+
+        if language == "en":
+            return obj.description
+
+        translation = obj.translations.filter(
+            language=language
+        ).first()
+
+        if translation:
+            return translation.description
+
+        return obj.description
+
 
 class SafetyResponseSerializer(
     serializers.ModelSerializer
 ):
+    message = serializers.SerializerMethodField()
+
     class Meta:
         model = SafetyResponse
         fields = [
@@ -38,8 +105,26 @@ class SafetyResponseSerializer(
             "is_active",
         ]
 
+    def get_message(self, obj):
+        language = get_requested_language(self)
+
+        if language == "en":
+            return obj.message
+
+        translation = obj.translations.filter(
+            language=language
+        ).first()
+
+        if translation:
+            return translation.message
+
+        return obj.message
+
 
 class RightsTopicSerializer(serializers.ModelSerializer):
+    title = serializers.SerializerMethodField()
+    summary = serializers.SerializerMethodField()
+
     action_steps = ActionStepSerializer(
         many=True,
         read_only=True,
@@ -74,6 +159,36 @@ class RightsTopicSerializer(serializers.ModelSerializer):
             "safety_responses",
             "is_active",
         ]
+
+    def get_title(self, obj):
+        language = get_requested_language(self)
+
+        if language == "en":
+            return obj.title
+
+        translation = obj.translations.filter(
+            language=language
+        ).first()
+
+        if translation:
+            return translation.title
+
+        return obj.title
+
+    def get_summary(self, obj):
+        language = get_requested_language(self)
+
+        if language == "en":
+            return obj.summary
+
+        translation = obj.translations.filter(
+            language=language
+        ).first()
+
+        if translation:
+            return translation.summary
+
+        return obj.summary
 
 
 class SituationRightsTopicSerializer(
