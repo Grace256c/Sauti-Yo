@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from requests.exceptions import ConnectionError as RequestsConnectionError
 
 from apps.channels.models import VoiceSession
-from apps.channels.voice import sessions, transcription
+from apps.channels.voice import sessions, transcription, ivr
 
 
 class VoiceSessionModelTests(TestCase):
@@ -133,3 +133,52 @@ class TranscribeRecordingTests(TestCase):
     def test_missing_api_key_returns_none(self):
         result = transcription.transcribe_recording("https://example.com/rec.mp3")
         self.assertIsNone(result)
+
+
+class IvrXmlTests(TestCase):
+    def test_greeting_includes_say_and_record(self):
+        xml = ivr.build_greeting_xml()
+        self.assertIn("<Response>", xml)
+        self.assertIn("<Say>", xml)
+        self.assertIn("<Record", xml)
+
+    def test_safety_checkin_normal_asks_are_you_safe(self):
+        xml = ivr.build_safety_checkin_xml(discreet=False)
+        self.assertIn("Are you safe", xml)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn('numDigits="1"', xml)
+
+    def test_safety_checkin_discreet_omits_are_you_safe(self):
+        xml = ivr.build_safety_checkin_xml(discreet=True)
+        self.assertNotIn("Are you safe", xml)
+        self.assertIn("<GetDigits", xml)
+
+    def test_reply_xml_includes_spoken_text_and_menu(self):
+        xml = ivr.build_reply_xml("Move to a safer location if you can.")
+        self.assertIn("Move to a safer location if you can.", xml)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("press 1", xml.lower())
+
+    def test_reply_xml_escapes_special_characters(self):
+        xml = ivr.build_reply_xml("Rights & Action < 5 steps")
+        self.assertIn("Rights &amp; Action &lt; 5 steps", xml)
+        self.assertNotIn("Rights & Action < 5 steps", xml)
+
+    def test_unmatched_retry_includes_record(self):
+        xml = ivr.build_unmatched_xml(retry=True)
+        self.assertIn("<Record", xml)
+
+    def test_unmatched_give_up_has_no_record_or_digits(self):
+        xml = ivr.build_unmatched_xml(retry=False)
+        self.assertNotIn("<Record", xml)
+        self.assertNotIn("<GetDigits", xml)
+
+    def test_final_message_says_given_text_with_no_further_action(self):
+        xml = ivr.build_final_message_xml("Your safety matters. Call Sauti 116.")
+        self.assertIn("Your safety matters. Call Sauti 116.", xml)
+        self.assertNotIn("<Record", xml)
+        self.assertNotIn("<GetDigits", xml)
+
+    def test_closing_says_thank_you(self):
+        xml = ivr.build_closing_xml()
+        self.assertIn("Thank you", xml)
