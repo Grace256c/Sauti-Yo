@@ -56,16 +56,22 @@ def handle_voice_request(session_id, phone_number, is_active, dtmf_digits, recor
     existing = VoiceSession.objects.filter(
         session_id=session_id, is_active=True
     ).first()
-    if existing is not None and existing.state in (
-        "awaiting_safety_digit",
-        "post_reply_menu",
-    ):
-        # A GetDigits timeout comes back from Africa's Talking with empty
-        # dtmfDigits. Route it through digit handling with an empty digit
-        # rather than falling through to a fresh greeting, which would
-        # silently abandon a pending safety check-in (or post-reply menu)
-        # and waste the rate-limit budget on repeated timeouts.
-        return _handle_digits(session_id, phone_number, "")
+    if existing is not None:
+        if existing.state in ("awaiting_safety_digit", "post_reply_menu"):
+            # A GetDigits timeout comes back from Africa's Talking with empty
+            # dtmfDigits. Route it through digit handling with an empty digit
+            # rather than falling through to a fresh greeting, which would
+            # silently abandon a pending safety check-in (or post-reply menu)
+            # and waste the rate-limit budget on repeated timeouts.
+            return _handle_digits(session_id, phone_number, "")
+        if existing.state == "awaiting_recording":
+            # Africa's Talking can call back with recordingUrl="" (not
+            # absent) when a <Record> captured silence or no audio - falsy
+            # either way, so this and a genuinely missing recordingUrl both
+            # land here. Treat it exactly like a failed/empty transcription
+            # rather than re-greeting a session that's already past the
+            # greeting and burning its rate-limit budget on a repeat.
+            return _handle_unmatched(existing)
 
     return _handle_call_start(session_id, phone_number)
 

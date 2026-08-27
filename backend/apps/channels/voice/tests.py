@@ -377,6 +377,20 @@ class HandleVoiceRequestTests(TestCase):
         session = VoiceSession.objects.get(session_id="sess-6g")
         self.assertEqual(session.state, "awaiting_recording")
 
+    def test_empty_recording_url_on_existing_recording_session_retries_not_greets(
+        self,
+    ):
+        handle_voice_request("sess-empty-rec", "+256700000000", "1", "", "")
+        xml = handle_voice_request(
+            "sess-empty-rec", "+256700000000", "1", "", ""
+        )
+        self.assertIn("<Record", xml)
+        self.assertNotIn("Welcome to Sauti Yo", xml)
+        self.assertIn("Sorry, I didn't catch that", xml)
+        session = VoiceSession.objects.get(session_id="sess-empty-rec")
+        self.assertEqual(session.state, "awaiting_recording")
+        self.assertEqual(session.context.get("attempts"), 1)
+
     def test_discreet_keyword_omits_service_name_from_reply(self):
         _create_home_safety_situation()
         handle_voice_request("sess-7", "+256700000000", "1", "", "")
