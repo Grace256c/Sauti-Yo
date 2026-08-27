@@ -79,9 +79,33 @@ def _resolve_pending_safety_check(phone_number, slug, discreet):
 
 def _reply_to_situation(phone_number, slug, text):
     language = _get_language(phone_number)
+
     detail = get_situation_detail(slug)
+
+    # Backwards compatibility:
+    # older SMS keyword/test data uses "home-safety",
+    # while the current pilot catalogue uses
+    # "domestic-violence".
+    if (
+        detail is None
+        and slug == "home-safety"
+    ):
+        current_slug = "domestic-violence"
+        current_detail = get_situation_detail(
+            current_slug
+        )
+
+        if current_detail is not None:
+            slug = current_slug
+            detail = current_detail
+
     if detail is None:
-        _send(phone_number, templates.build_unmatched_reply(language))
+        _send(
+            phone_number,
+            templates.build_unmatched_reply(
+                language
+            ),
+        )
         return
     discreet = keywords.match_discreet(text)
 
@@ -183,7 +207,13 @@ def handle_sms_request(phone_number, text):
 
     if keywords.match_danger(text):
         detail = _live_context_detail(phone_number)
-        _send(phone_number, templates.build_safety_reply(detail))
+        _send(
+            phone_number,
+            templates.build_safety_reply(
+                detail,
+                language=language,
+            ),
+        )
         _clear_pending_safety_check(phone_number)
         return
 
@@ -191,7 +221,13 @@ def handle_sms_request(phone_number, text):
     if pending is not None and pending.pending_safety_check:
         if keywords.match_not_safe_answer(text):
             detail = get_situation_detail(pending.last_situation_slug)
-            _send(phone_number, templates.build_safety_reply(detail))
+            _send(
+            phone_number,
+            templates.build_safety_reply(
+                detail,
+                language=language,
+            ),
+        )
             _resolve_pending_safety_check(
                 phone_number, pending.last_situation_slug, pending.discreet
             )

@@ -136,6 +136,50 @@ GENERAL_SAFETY_REPLY = (
     "If you are in immediate danger, call the Police on 999 or 112 now. "
     "Free support: Sauti 116."
 )
+
+GENERAL_SAFETY_REPLIES = {
+    "en": (
+        "If you are in immediate danger, call the Police "
+        "on 999 or 112 now. Free support: Sauti 116."
+    ),
+    "lg": (
+        "Bw'oba oli mu kabi ak'amangu, kuba Poliisi ku "
+        "999 oba 112 kati. Obuyambi obw'obwereere: "
+        "Sauti 116."
+    ),
+    "sw": (
+        "Ikiwa uko katika hatari ya haraka, piga Polisi "
+        "999 au 112 sasa. Msaada wa bure: Sauti 116."
+    ),
+    "nyn": (
+        "Ku oraabe ori omu kabi k'amangu, teera Police "
+        "999 nari 112 hati. Obuhwezi bw'obusa: "
+        "Sauti 116."
+    ),
+}
+
+DOMESTIC_VIOLENCE_SAFETY_REPLIES = {
+    "en": (
+        "Your safety matters. If you are in immediate "
+        "danger, call Police on 999 or 112, or the GBV "
+        "Helpline on 0800 199 195."
+    ),
+    "lg": (
+        "Obukuumi bwo bukulu. Bw'oba oli mu kabi "
+        "ak'amangu, kuba Poliisi ku 999 oba 112, oba "
+        "GBV Helpline ku 0800 199 195."
+    ),
+    "sw": (
+        "Usalama wako ni muhimu. Ikiwa uko katika "
+        "hatari ya haraka, piga Polisi 999 au 112, "
+        "au GBV Helpline 0800 199 195."
+    ),
+    "nyn": (
+        "Obuteka bwawe ni bukuru. Ku oraabe ori omu "
+        "kabi k'amangu, teera Police 999 nari 112, "
+        "nari GBV Helpline 0800 199 195."
+    ),
+}
 NO_SUPPORT_SERVICES_REPLY = (
     "No support contacts are available right now. In an emergency, call "
     "the Police on 999 or 112."
@@ -360,12 +404,35 @@ def build_support_reply(detail=None, mode="normal"):
     return "\n".join(lines) if lines else NO_SUPPORT_SERVICES_REPLY
 
 
-def build_safety_reply(detail=None, trigger_key="immediate_danger"):
-    if detail is not None:
-        message = get_safety_message(detail["slug"], trigger_key)
+def build_safety_reply(
+    detail=None,
+    trigger_key="immediate_danger",
+    language="en",
+):
+    language = _sms_language(language)
+
+    # English continues to use the reviewed rights
+    # safety message when one exists.
+    if language == "en" and detail is not None:
+        message = get_safety_message(
+            detail["slug"],
+            trigger_key,
+        )
+
         if message:
             return message
-    return GENERAL_SAFETY_REPLY
+
+    # Non-English SMS uses controlled channel copy.
+    # Phone numbers remain unchanged.
+    if detail is not None and detail.get("slug") in {
+        "domestic-violence",
+        "home-safety",
+    }:
+        return DOMESTIC_VIOLENCE_SAFETY_REPLIES[
+            language
+        ]
+
+    return GENERAL_SAFETY_REPLIES[language]
 
 
 def build_steps_reply(
