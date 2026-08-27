@@ -230,8 +230,14 @@ def _situation_list_page(session):
     back = get_copy("ussd.back", session.language)
     header = get_copy("ussd.choose_situation", session.language)
     more_label = get_copy("ussd.more", session.language)
+    exit_label = get_copy("ussd.exit", session.language)
 
-    reserved = len(header) + 1 + len(f"8. {more_label}") + 1 + len(f"0. {back}") + 2
+    reserved = (
+        len(header) + 1
+        + len(f"8. {more_label}") + 1
+        + len(f"9. {back}") + 1
+        + len(f"0. {exit_label}") + 2
+    )
     budget = max(SCREEN_BUDGET - reserved, 20)
 
     lines, shown, next_index, has_more = _fit_numbered_lines(
@@ -248,15 +254,17 @@ def render_situation_list(session):
     situations, header, lines, shown, next_index, has_more, back, more_label = (
         _situation_list_page(session)
     )
+    exit_label = get_copy("ussd.exit", session.language)
 
     if not situations:
         body = get_copy("ussd.no_situations", session.language)
-        return f"{body}\n\n0. {back}", False
+        return f"{body}\n\n9. {back}\n0. {exit_label}", False
 
     screen_lines = [header] + lines
     if has_more:
         screen_lines.append(f"8. {more_label}")
-    screen_lines.append(f"0. {back}")
+    screen_lines.append(f"9. {back}")
+    screen_lines.append(f"0. {exit_label}")
     return "\n".join(screen_lines), False
 
 
@@ -265,7 +273,7 @@ def transition_situation_list(session, user_input):
         _situation_list_page(session)
     )
 
-    if user_input == "0":
+    if user_input == "9":
         return "main_menu", {}
     if user_input == "8" and has_more:
         return "situation_list", {"page": next_index}

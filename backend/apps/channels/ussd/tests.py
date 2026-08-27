@@ -383,6 +383,14 @@ class SituationListTests(TestCase):
         self.assertIn("1. ", text)
         self.assertIn("8.", text)
 
+    def test_render_shows_exit_and_back_options(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        text, ended = menus.render_situation_list(session)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
     def test_transition_next_page_advances_past_shown_items(self):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
@@ -399,6 +407,8 @@ class SituationListTests(TestCase):
         )
         text, ended = menus.render_situation_list(session)
         self.assertIn("No situations", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
 
     def test_transition_selects_situation_with_single_topic_skips_to_topic(self):
         situation = self.situations[0]
@@ -442,14 +452,14 @@ class SituationListTests(TestCase):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
         )
-        next_state, context = menus.transition_situation_list(session, "0")
+        next_state, context = menus.transition_situation_list(session, "9")
         self.assertEqual(next_state, "main_menu")
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
         )
-        self.assertIsNone(menus.transition_situation_list(session, "9"))
+        self.assertIsNone(menus.transition_situation_list(session, "20"))
 
 
 class SituationDetailTests(TestCase):
