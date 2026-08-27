@@ -42,3 +42,6 @@ Thumbs.db
 *.pem
 *.key
 credentials.json
+
+# Claude Code local worktrees
+.claude/worktrees/
