@@ -662,11 +662,12 @@ def render_support_contacts(session):
 
     services = list(topic.support_services.filter(is_active=True).order_by("name"))
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
 
     if not services:
         body = get_copy("ussd.no_support_contacts", session.language)
-        return f"{body}\n\n{back}", False
+        exit_label = get_copy("ussd.exit", session.language)
+        return f"{body}\n\n{back}\n0. {exit_label}", False
 
     screen, _ = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
@@ -683,12 +684,12 @@ def transition_support_contacts(session, user_input):
 
     services = list(topic.support_services.filter(is_active=True).order_by("name"))
     if not services:
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
     _, is_last = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
     )
@@ -699,11 +700,11 @@ def transition_support_contacts(session, user_input):
                 "support_contacts",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
-    if user_input == "0":
+    if user_input == "9":
         return _back_to_topic_detail(situation_slug, topic_slug)
     return None
 
@@ -715,11 +716,12 @@ def render_emergency_list(session):
         ).order_by("name")
     )
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
 
     if not services:
         body = get_copy("ussd.no_emergency_contacts", session.language)
-        return f"{body}\n\n{back}", False
+        exit_label = get_copy("ussd.exit", session.language)
+        return f"{body}\n\n{back}\n0. {exit_label}", False
 
     screen, _ = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
@@ -734,12 +736,12 @@ def transition_emergency_list(session, user_input):
         ).order_by("name")
     )
     if not services:
-        if user_input == "0":
+        if user_input == "9":
             return "main_menu", {}
         return None
 
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
     _, is_last = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
     )
@@ -750,11 +752,11 @@ def transition_emergency_list(session, user_input):
                 "emergency_list",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return "main_menu", {}
         return None
 
-    if user_input == "0":
+    if user_input == "9":
         return "main_menu", {}
     return None
 

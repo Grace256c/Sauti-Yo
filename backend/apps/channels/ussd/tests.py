@@ -987,10 +987,19 @@ class SupportContactsTests(TestCase):
         self.topic.support_services.clear()
         text, ended = menus.render_support_contacts(self._session())
         self.assertIn("No support contacts", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
+    def test_transition_back_with_no_contacts_returns_to_topic_detail(self):
+        self.topic.support_services.clear()
+        next_state, context = menus.transition_support_contacts(
+            self._session(), "9"
+        )
+        self.assertEqual(next_state, "topic_detail")
 
     def test_transition_back_returns_to_topic_detail(self):
         next_state, context = menus.transition_support_contacts(
-            self._session(), "0"
+            self._session(), "9"
         )
         self.assertEqual(next_state, "topic_detail")
         self.assertEqual(context["chunk_index"], 9999)
@@ -1022,13 +1031,20 @@ class EmergencyListTests(TestCase):
         self.assertNotIn("Regular Clinic", text)
 
     def test_transition_back_returns_to_main_menu(self):
-        next_state, context = menus.transition_emergency_list(self._session(), "0")
+        next_state, context = menus.transition_emergency_list(self._session(), "9")
         self.assertEqual(next_state, "main_menu")
 
     def test_render_with_no_emergency_contacts_shows_empty_message(self):
         SupportService.objects.all().delete()
         text, ended = menus.render_emergency_list(self._session())
         self.assertIn("No emergency contacts", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
+    def test_transition_back_with_no_contacts_returns_to_main_menu(self):
+        SupportService.objects.all().delete()
+        next_state, context = menus.transition_emergency_list(self._session(), "9")
+        self.assertEqual(next_state, "main_menu")
 
     def test_render_last_chunk_does_not_end_session(self):
         text, ended = menus.render_emergency_list(self._session(9999))
