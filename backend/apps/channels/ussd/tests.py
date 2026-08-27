@@ -126,6 +126,12 @@ class GetCopyTests(TestCase):
         self.assertEqual(text, menus.DEFAULT_COPY["ussd.main_menu"])
 
     def test_prefers_channel_content_row_when_present(self):
+        ChannelContent.objects.filter(
+            content_key="ussd.main_menu",
+            language="lg",
+            channel="ussd",
+        ).delete()
+
         ChannelContent.objects.create(
             content_key="ussd.main_menu",
             language="lg",
@@ -174,14 +180,39 @@ class LanguageSelectTests(TestCase):
         self.assertEqual(session.language, "en")
         self.assertEqual(context, {})
 
-    def test_transition_unavailable_language_stays_on_picker_with_notice(self):
-        for digit, expected_language in (("2", "lg"), ("3", "sw"), ("4", "nyn")):
-            session = UssdSession(state="language_select", language="", context={})
-            next_state, context = menus.transition_language_select(session, digit)
-            self.assertEqual(next_state, "language_select")
-            self.assertIs(context["unavailable_notice"], True)
-            self.assertEqual(context["requested_language"], expected_language)
-            self.assertEqual(session.language, "")
+    def test_transition_supported_languages_move_to_main_menu(self):
+        cases = (
+            ("2", "lg"),
+            ("3", "sw"),
+            ("4", "nyn"),
+        )
+
+        for digit, expected_language in cases:
+            session = UssdSession(
+                state="language_select",
+                language="",
+                context={},
+            )
+
+            next_state, context = (
+                menus.transition_language_select(
+                    session,
+                    digit,
+                )
+            )
+
+            self.assertEqual(
+                next_state,
+                "main_menu",
+            )
+            self.assertEqual(
+                context,
+                {},
+            )
+            self.assertEqual(
+                session.language,
+                expected_language,
+            )
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(state="language_select", language="", context={})
@@ -1003,43 +1034,106 @@ class HandleUssdRequestTests(TestCase):
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertTrue(session.is_active)
 
-    def test_unavailable_language_pick_stays_on_picker_end_to_end(self):
-        response = handle_ussd_request("sess-lang-unavail", "+256700000000", "")
-        self.assertTrue(response.startswith("CON "))
-        response = handle_ussd_request("sess-lang-unavail", "+256700000000", "2")
-        self.assertIn("not available yet", response)
-        self.assertIn("1. English", response)
+    def test_luganda_language_pick_enters_translated_main_menu(self):
+        handle_ussd_request(
+            "sess-lang-lg",
+            "+256700000000",
+            "",
+        )
 
-        session = UssdSession.objects.get(session_id="sess-lang-unavail")
-        self.assertEqual(session.state, "language_select")
-        self.assertEqual(session.language, "")
+        response = handle_ussd_request(
+            "sess-lang-lg",
+            "+256700000000",
+            "2",
+        )
 
-    def test_two_unavailable_language_picks_in_a_row_end_to_end(self):
-        handle_ussd_request("sess-lang-double", "+256700000000", "")
-        handle_ussd_request("sess-lang-double", "+256700000000", "2")
-        response = handle_ussd_request("sess-lang-double", "+256700000000", "2*3")
-        self.assertIn("not available yet", response)
+        session = UssdSession.objects.get(
+            session_id="sess-lang-lg",
+        )
 
-        session = UssdSession.objects.get(session_id="sess-lang-double")
-        self.assertEqual(session.state, "language_select")
-        self.assertEqual(session.language, "")
-        self.assertEqual(session.context.get("requested_language"), "sw")
+        self.assertEqual(
+            session.language,
+            "lg",
+        )
+        self.assertEqual(
+            session.state,
+            "main_menu",
+        )
+        self.assertIn(
+            "Noonya eddembe lyange",
+            response,
+        )
 
-        response = handle_ussd_request("sess-lang-double", "+256700000000", "2*3*1")
-        self.assertIn("1. Find my rights", response)
-        session.refresh_from_db()
-        self.assertEqual(session.state, "main_menu")
-        self.assertEqual(session.language, "en")
+    def test_kiswahili_language_pick_enters_translated_main_menu(self):
+        handle_ussd_request(
+            "sess-lang-sw",
+            "+256700000000",
+            "",
+        )
 
-    def test_replayed_unavailable_language_pick_returns_cached_response(self):
-        handle_ussd_request("sess-lang-replay", "+256700000000", "")
-        first_response = handle_ussd_request("sess-lang-replay", "+256700000000", "3")
-        replayed_response = handle_ussd_request("sess-lang-replay", "+256700000000", "3")
-        self.assertEqual(first_response, replayed_response)
+        response = handle_ussd_request(
+            "sess-lang-sw",
+            "+256700000000",
+            "3",
+        )
 
-        session = UssdSession.objects.get(session_id="sess-lang-replay")
-        self.assertEqual(session.state, "language_select")
+        session = UssdSession.objects.get(
+            session_id="sess-lang-sw",
+        )
 
+        self.assertEqual(
+            session.language,
+            "sw",
+        )
+        self.assertEqual(
+            session.state,
+            "main_menu",
+        )
+        self.assertIn(
+            "Tafuta haki zangu",
+            response,
+        )
+
+    def test_replayed_supported_language_pick_returns_cached_response(self):
+        handle_ussd_request(
+            "sess-lang-replay",
+            "+256700000000",
+            "",
+        )
+
+        first_response = handle_ussd_request(
+            "sess-lang-replay",
+            "+256700000000",
+            "4",
+        )
+
+        replayed_response = handle_ussd_request(
+            "sess-lang-replay",
+            "+256700000000",
+            "4",
+        )
+
+        self.assertEqual(
+            first_response,
+            replayed_response,
+        )
+
+        session = UssdSession.objects.get(
+            session_id="sess-lang-replay",
+        )
+
+        self.assertEqual(
+            session.state,
+            "main_menu",
+        )
+        self.assertEqual(
+            session.language,
+            "nyn",
+        )
+        self.assertIn(
+            "Ronda obugabe bwangye",
+            first_response,
+        )
 
 from django.urls import reverse
 

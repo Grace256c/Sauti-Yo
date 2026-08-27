@@ -36,8 +36,20 @@ class UssdSession(models.Model):
 
 
 class SmsContext(models.Model):
+    LANGUAGE_CHOICES = [
+        ("en", "English"),
+        ("lg", "Luganda"),
+        ("sw", "Kiswahili"),
+        ("nyn", "Runyankole"),
+    ]
+
     phone_number = models.CharField(max_length=50, unique=True)
-    last_situation_slug = models.SlugField()
+    last_situation_slug = models.SlugField(blank=True, default="")
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default="en",
+    )
     discreet = models.BooleanField(default=False)
     pending_safety_check = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)

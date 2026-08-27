@@ -1,1 +1,53 @@
-{}
+{
+  "brand": {
+    "name": "Sauti Yo",
+    "tagline": "Manya. Kora. Hurirwa."
+  },
+  "nav": {
+    "home": "Ahaka",
+    "about": "Ebikwatiraine Naitwe",
+    "rights": "Manya Obugabe Bwawe",
+    "howItWorks": "Oku Kikora",
+    "access": "Oku Orikubaasa Kukikoresa",
+    "community": "Eiraka ry'Abantu",
+    "support": "Shanga Obuhwezi",
+    "partner": "Omwanya gw'Abakwatanisa"
+  },
+  "common": {
+    "language": "Orurimi",
+    "back": "Garuka",
+    "continue": "Gumizamu",
+    "learnMore": "Manya ebindi",
+    "startHere": "Tandikira Aha",
+    "english": "English",
+    "luganda": "Luganda",
+    "kiswahili": "Kiswahili",
+    "runyankole": "Runyankole"
+  },
+  "rights": {
+    "relevantSituation": "Embeera erikukwataho",
+    "groundedMatch": "Ekikwatagana n'amakuru agariho",
+    "safetyFirst": "Oburinzi nibwo bubanza",
+    "whatMayBeRelevant": "Ekirikubaasa kukukwataho",
+    "legalBasis": "Omusingi gw'amateeka",
+    "verified": "Kikakasirwe",
+    "reviewRequired": "Nikyetenga kushwijumwa",
+    "viewLegalSource": "Reeba ensibuko y'amateeka",
+    "noLegalReferences": "Tihariho by'amateeka ebitebeekanisiibwe ahabw'ensonga egi.",
+    "practicalNextSteps": "Emitendera y'okukuratira",
+    "supportRelevant": "Obuhwezi oburikubaasa kukukwataho",
+    "emergencySupport": "Obuhwezi bw'amangu",
+    "exploreSupport": "Reeba Engeri z'Obuhwezi",
+    "analyseAnother": "Shwijuma ensonga endiijo",
+    "guidedRoute": "Nooyenda omuhanda ogurikukwebembera?",
+    "chooseSituation": "Toorana embeera erikushusha n'eyawe.",
+    "guidedExplanation": "Noobaasa kukoresa ebibuuzo ebirikukwebembera waaba nooyenda kutoorana omu by'okureeberaho.",
+    "soundsClosest": "Egi niyo erikushusha munonga",
+    "stillUnsure": "Okyeetegyereza?",
+    "startClosest": "Tandikira aha erikushusha munonga.",
+    "reassurance": "Eki waabanza kutoorana tikirikukusiba. Noobaasa kuhindura enshoboorora yawe, kutoorana embeera endiijo, nari kuronda omuhanda ogundi.",
+    "startExperience": "Tandikira aha ky'orabiiremu.",
+    "connectRights": "Nitwija kukikwatanisa n'amakuru g'obugabe bwawe.",
+    "viewCategories": "Reeba Emitendera Yoona"
+  }
+}

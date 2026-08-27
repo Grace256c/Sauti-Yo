@@ -6,6 +6,18 @@ import lg from "./locales/lg.json";
 import sw from "./locales/sw.json";
 import nyn from "./locales/nyn.json";
 
+const supportedLanguages = ["en", "lg", "sw", "nyn"];
+
+const savedLanguage =
+  typeof window !== "undefined"
+    ? window.localStorage.getItem("sauti-yo-language")
+    : null;
+
+const initialLanguage =
+  savedLanguage && supportedLanguages.includes(savedLanguage)
+    ? savedLanguage
+    : "en";
+
 i18n.use(initReactI18next).init({
   resources: {
     en: { translation: en },
@@ -14,12 +26,30 @@ i18n.use(initReactI18next).init({
     nyn: { translation: nyn },
   },
 
-  lng: "en",
+  lng: initialLanguage,
   fallbackLng: "en",
 
   interpolation: {
     escapeValue: false,
   },
 });
+
+i18n.on("languageChanged", (language) => {
+  if (
+    typeof window !== "undefined" &&
+    supportedLanguages.includes(language)
+  ) {
+    window.localStorage.setItem(
+      "sauti-yo-language",
+      language,
+    );
+
+    document.documentElement.lang = language;
+  }
+});
+
+if (typeof document !== "undefined") {
+  document.documentElement.lang = initialLanguage;
+}
 
 export default i18n;

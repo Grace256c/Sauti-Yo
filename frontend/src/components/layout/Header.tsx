@@ -25,17 +25,17 @@ const languages = [
 ];
 
 const navigation = [
-  { to: "/", label: "Home" },
-  { to: "/about", label: "About" },
-  { to: "/rights", label: "Know Your Rights" },
-  { to: "/how-it-works", label: "How It Works" },
-  { to: "/access", label: "Access" },
-  { to: "/community", label: "Community Voice" },
-  { to: "/support", label: "Find Support" },
+  { to: "/", key: "nav.home" },
+  { to: "/about", key: "nav.about" },
+  { to: "/rights", key: "nav.rights" },
+  { to: "/how-it-works", key: "nav.howItWorks" },
+  { to: "/access", key: "nav.access" },
+  { to: "/community", key: "nav.community" },
+  { to: "/support", key: "nav.support" },
 ];
 
 export default function Header() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -133,7 +133,7 @@ export default function Header() {
                       isActive ? "-translate-y-0.5" : ""
                     }`}
                   >
-                    {item.label}
+                    {t(item.key)}
                   </span>
 
                   <span
@@ -202,7 +202,7 @@ export default function Header() {
             to="/rights"
             className="btn-primary ml-1 whitespace-nowrap"
           >
-            Start Here
+            {t("common.startHere")}
           </NavLink>
         </div>
 
@@ -271,7 +271,7 @@ export default function Header() {
                         <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 bg-gold" />
                       )}
 
-                      {item.label}
+                      {t(item.key)}
                     </>
                   )}
                 </NavLink>
@@ -281,7 +281,7 @@ export default function Header() {
             <div className="mt-5">
               <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
                 <Globe2 className="h-4 w-4" />
-                Language
+                {t("common.language")}
               </p>
 
               <div className="grid grid-cols-2 gap-2">
@@ -313,7 +313,7 @@ export default function Header() {
               to="/rights"
               className="btn-primary mt-5 w-full"
             >
-              Start Here
+              {t("common.startHere")}
             </NavLink>
           </div>
         </div>
