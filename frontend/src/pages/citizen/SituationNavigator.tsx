@@ -67,6 +67,17 @@ export default function SituationNavigator() {
     }
   };
 
+  const handleResetAnalysis = () => {
+    setConcern("");
+    setResult(null);
+    setError("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
   const matchedSituation =
     result?.matched
       ? result.situation
@@ -497,6 +508,15 @@ export default function SituationNavigator() {
                   “Review required” is awaiting final legal-review
                   approval.
                 </p>
+
+                <button
+                  type="button"
+                  onClick={handleResetAnalysis}
+                  className="btn-secondary mt-6 inline-flex"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Analyse another concern
+                </button>
               </div>
             </div>
           </div>

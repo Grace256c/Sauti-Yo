@@ -169,9 +169,9 @@ export async function analyseRightsConcern(
     "/api/rights/analyse/",
     {
       method: "POST",
-      body: JSON.stringify({
+      body: {
         concern,
-      }),
+      },
     },
   );
 }
