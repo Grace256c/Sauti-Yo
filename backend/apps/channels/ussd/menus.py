@@ -154,8 +154,6 @@ def transition_main_menu(session, user_input):
         return "situation_list", {"page": 0}
     if user_input == "2":
         return "emergency_list", {"chunk_index": 0}
-    if user_input == "0":
-        return "goodbye", {}
     return None
 
 
@@ -779,4 +777,6 @@ def render_state(state, session):
 
 
 def transition_state(state, session, user_input):
+    if user_input == "0" and state != "goodbye":
+        return "goodbye", {}
     return TRANSITION_HANDLERS[state](session, user_input)

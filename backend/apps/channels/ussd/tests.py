@@ -260,8 +260,9 @@ class MainMenuTests(TestCase):
 
     def test_transition_exit_goes_to_goodbye(self):
         session = UssdSession(state="main_menu", language="en", context={})
-        next_state, context = menus.transition_main_menu(session, "0")
+        next_state, context = menus.transition_state("main_menu", session, "0")
         self.assertEqual(next_state, "goodbye")
+        self.assertEqual(context, {})
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(state="main_menu", language="en", context={})
@@ -274,6 +275,50 @@ class GoodbyeTests(TestCase):
         text, ended = menus.render_goodbye(session)
         self.assertIn("Thank you", text)
         self.assertTrue(ended)
+
+
+class GlobalExitTests(TestCase):
+    def test_exit_from_situation_list_ends_session(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_state("situation_list", session, "0")
+        self.assertEqual(next_state, "goodbye")
+        self.assertEqual(context, {})
+
+    def test_exit_from_topic_detail_ends_session(self):
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "topic-a",
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_state("topic_detail", session, "0")
+        self.assertEqual(next_state, "goodbye")
+
+    def test_exit_from_action_steps_ends_session(self):
+        session = UssdSession(
+            state="action_steps",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "topic-a",
+                "step_index": 0,
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_state("action_steps", session, "0")
+        self.assertEqual(next_state, "goodbye")
+
+    def test_exit_from_language_select_ends_session(self):
+        session = UssdSession(state="language_select", language="", context={})
+        next_state, context = menus.transition_state(
+            "language_select", session, "0"
+        )
+        self.assertEqual(next_state, "goodbye")
 
 
 from apps.rights.models import RightsTopic, Situation, SituationRightsTopic
@@ -931,6 +976,18 @@ class HandleUssdRequestTests(TestCase):
 
         self.assertTrue(response.startswith("END "))
         session = UssdSession.objects.get(session_id="sess-3")
+        self.assertFalse(session.is_active)
+
+    def test_exit_from_mid_flow_ends_session(self):
+        handle_ussd_request("sess-exit-midflow", "+256700000000", "")
+        handle_ussd_request("sess-exit-midflow", "+256700000000", "1")
+        handle_ussd_request("sess-exit-midflow", "+256700000000", "1*1")
+        response = handle_ussd_request(
+            "sess-exit-midflow", "+256700000000", "1*1*0"
+        )
+
+        self.assertTrue(response.startswith("END "))
+        session = UssdSession.objects.get(session_id="sess-exit-midflow")
         self.assertFalse(session.is_active)
 
     def test_invalid_input_redisplays_screen_with_prefix(self):
