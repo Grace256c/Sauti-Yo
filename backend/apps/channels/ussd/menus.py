@@ -295,7 +295,7 @@ def render_situation_detail(session):
 
     topics = list(_topics_for_situation(situation)[:9])
     back = get_copy("ussd.back", session.language)
-    trailing = get_copy("ussd.continue", session.language) if topics else f"0. {back}"
+    trailing = get_copy("ussd.continue", session.language) if topics else f"9. {back}"
 
     chunk_index = session.context.get("chunk_index", 0)
     text = situation.description or situation.title
@@ -315,7 +315,7 @@ def transition_situation_detail(session, user_input):
 
     topics = list(_topics_for_situation(situation)[:9])
     back = get_copy("ussd.back", session.language)
-    trailing = get_copy("ussd.continue", session.language) if topics else f"0. {back}"
+    trailing = get_copy("ussd.continue", session.language) if topics else f"9. {back}"
 
     chunk_index = session.context.get("chunk_index", 0)
     text = situation.description or situation.title
@@ -327,11 +327,11 @@ def transition_situation_detail(session, user_input):
                 "situation_detail",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return "situation_list", {"page": 0}
         return None
 
-    if user_input == "0":
+    if user_input == "9":
         return "situation_list", {"page": 0}
     if topics and user_input == "1":
         return (
@@ -350,8 +350,14 @@ def _situation_topics_page(session, topics):
     back = get_copy("ussd.back", session.language)
     header = get_copy("ussd.related_rights", session.language)
     more_label = get_copy("ussd.more", session.language)
+    exit_label = get_copy("ussd.exit", session.language)
 
-    reserved = len(header) + 1 + len(f"8. {more_label}") + 1 + len(f"0. {back}") + 2
+    reserved = (
+        len(header) + 1
+        + len(f"8. {more_label}") + 1
+        + len(f"9. {back}") + 1
+        + len(f"0. {exit_label}") + 2
+    )
     budget = max(SCREEN_BUDGET - reserved, 20)
 
     lines, shown, next_index, has_more = _fit_numbered_lines(
@@ -372,7 +378,8 @@ def _render_situation_topics(session, situation):
     screen_lines = [header] + lines
     if has_more:
         screen_lines.append(f"8. {more_label}")
-    screen_lines.append(f"0. {back}")
+    screen_lines.append(f"9. {back}")
+    screen_lines.append(f"0. {get_copy('ussd.exit', session.language)}")
     return "\n".join(screen_lines), False
 
 
@@ -382,7 +389,7 @@ def _transition_situation_topics(session, user_input, situation):
         _situation_topics_page(session, topics)
     )
 
-    if user_input == "0":
+    if user_input == "9":
         return "situation_list", {"page": 0}
     if user_input == "8" and has_more:
         return (

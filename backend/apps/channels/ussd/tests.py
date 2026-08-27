@@ -501,6 +501,8 @@ class SituationDetailTests(TestCase):
         text, ended = menus.render_situation_detail(session)
         self.assertIn("1. Topic A", text)
         self.assertIn("2. Topic B", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_last_chunk_does_not_end_session(self):
@@ -543,13 +545,33 @@ class SituationDetailTests(TestCase):
         self.assertEqual(next_state, "topic_detail")
         self.assertEqual(context["topic_slug"], "topic-a")
 
+    def test_transition_topics_stage_back_returns_to_situation_list(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "stage": "topics", "page": 0},
+        )
+        next_state, context = menus.transition_situation_detail(session, "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
     def test_transition_back_returns_to_situation_list(self):
         session = UssdSession(
             state="situation_detail",
             language="en",
             context={"situation_slug": "eviction", "chunk_index": 9999},
         )
-        next_state, context = menus.transition_situation_detail(session, "0")
+        next_state, context = menus.transition_situation_detail(session, "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
+    def test_transition_back_returns_to_situation_list_before_last_chunk(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 0},
+        )
+        next_state, context = menus.transition_situation_detail(session, "9")
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
 
@@ -642,8 +664,8 @@ class SituationDetailTests(TestCase):
         )
         text, ended = menus.render_situation_detail(session)
         # The description body chunk (everything before the blank-line separator
-        # and the short "1. Continue\n0. Back" trailing) should be a substantial
-        # fraction of the screen budget, not a ~16-character fragment.
+        # and the short "1. Continue\n9. Back\n0. Exit" trailing) should be a
+        # substantial fraction of the screen budget, not a ~16-character fragment.
         body = text.split("\n\n")[0]
         self.assertGreater(len(body), 100)
 
@@ -678,7 +700,7 @@ class SituationDetailTests(TestCase):
         The description body budget for situation_detail is 139 chars, so the
         98-char URL above never exercises the hard-split path. Use a token that
         genuinely exceeds the budget: without _wrap_words' hard split this
-        renders a single ~321-char screen and loses the "0. Back" option.
+        renders a single ~321-char screen and loses the "9. Back" option.
         """
         self.situation.description = "See this resource: https://example.org/" + (
             "z" * 280
@@ -696,7 +718,7 @@ class SituationDetailTests(TestCase):
             self.assertLessEqual(
                 len(text), 182, f"chunk_index={chunk_index} produced {len(text)} chars"
             )
-            self.assertIn("0. Back", text)
+            self.assertIn("9. Back", text)
             seen_chunks += 1
         self.assertGreater(seen_chunks, 0)
 
@@ -711,6 +733,18 @@ class SituationDetailTests(TestCase):
         next_state, context = menus._back_from_topic("eviction", "topic-a")
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
+
+    def test_render_with_no_linked_topics_shows_back_and_exit(self):
+        Situation.objects.create(slug="no-topics-situation", title="No Topics")
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "no-topics-situation", "chunk_index": 9999},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+        self.assertFalse(ended)
 
 
 from apps.rights.models import ActionStep, SafetyResponse
@@ -1101,8 +1135,10 @@ class HandleUssdRequestTests(TestCase):
         self.assertEqual(session.state, "situation_detail")
         self.assertEqual(session.context.get("chunk_index"), 0)
 
-        # Invalid attempt in situation_detail (only "1" for More is valid)
-        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9")
+        # Invalid attempt in situation_detail (only "1" for More and "9" for
+        # Back are valid on a non-last chunk; use "7" as the invalid digit
+        # since Task 3 made "9" a valid Back input on this screen)
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*7")
         session.refresh_from_db()
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertEqual(session.state, "situation_detail")
@@ -1110,7 +1146,7 @@ class HandleUssdRequestTests(TestCase):
 
         # Valid navigation: "1" for More (this spreads context including attempts)
         # The fix should strip the attempts key from next_context before persisting
-        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9*1")
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*7*1")
         session.refresh_from_db()
         self.assertNotIn("attempts", session.context)
         self.assertEqual(session.state, "situation_detail")
@@ -1119,7 +1155,7 @@ class HandleUssdRequestTests(TestCase):
 
         # Another invalid attempt should count as 1, not 2
         # (because attempts was stripped from context on the previous valid transition)
-        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9*1*9")
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*7*1*7")
         session.refresh_from_db()
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertTrue(session.is_active)
