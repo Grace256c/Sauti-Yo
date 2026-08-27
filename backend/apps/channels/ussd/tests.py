@@ -120,6 +120,27 @@ class TextHelperTests(TestCase):
         self.assertFalse(has_more)
 
 
+class ChunkedScreenTests(TestCase):
+    def test_final_chunk_includes_exit_and_uses_nine_for_back(self):
+        screen, is_last = menus._chunked_screen(
+            "Body text", 0, "1. Continue\n9. Back", "en"
+        )
+        self.assertTrue(is_last)
+        self.assertIn("0. Exit", screen)
+        self.assertIn("9. Back", screen)
+
+    def test_intermediate_chunk_includes_more_back_and_exit(self):
+        long_text = " ".join(["word"] * 60)
+        screen, is_last = menus._chunked_screen(
+            long_text, 0, "1. Continue\n9. Back", "en"
+        )
+        self.assertFalse(is_last)
+        self.assertIn("1. More", screen)
+        self.assertIn("9. Back", screen)
+        self.assertIn("0. Exit", screen)
+        self.assertLessEqual(len(screen), 182)
+
+
 class GetCopyTests(TestCase):
     def test_falls_back_to_default_when_no_channel_content_row(self):
         text = menus.get_copy("ussd.main_menu", "en")
@@ -153,6 +174,18 @@ class GetCopyTests(TestCase):
         text = menus.get_copy("ussd.main_menu", "en")
         self.assertEqual(text, menus.DEFAULT_COPY["ussd.main_menu"])
 
+    def test_exit_copy_defaults_to_exit_label(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "en"), "Exit")
+
+    def test_topic_menu_copy_uses_nine_for_back(self):
+        self.assertIn("9. Back", menus.get_copy("ussd.topic_menu", "en"))
+
+    def test_continue_copy_uses_nine_for_back(self):
+        self.assertIn("9. Back", menus.get_copy("ussd.continue", "en"))
+
+    def test_safety_continue_copy_uses_nine_for_back(self):
+        self.assertIn("9. Back", menus.get_copy("ussd.safety_continue", "en"))
+
 
 class LanguageSelectTests(TestCase):
     def test_render_shows_welcome_and_language_options(self):
@@ -160,6 +193,7 @@ class LanguageSelectTests(TestCase):
         text, ended = menus.render_language_select(session)
         self.assertIn("Welcome to Sauti Yo", text)
         self.assertIn("1. English", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_shows_unavailable_notice_when_flagged(self):
@@ -171,6 +205,7 @@ class LanguageSelectTests(TestCase):
         text, ended = menus.render_language_select(session)
         self.assertIn("not available yet", text)
         self.assertIn("1. English", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_transition_english_sets_language_and_moves_to_main_menu(self):
@@ -260,8 +295,9 @@ class MainMenuTests(TestCase):
 
     def test_transition_exit_goes_to_goodbye(self):
         session = UssdSession(state="main_menu", language="en", context={})
-        next_state, context = menus.transition_main_menu(session, "0")
+        next_state, context = menus.transition_state("main_menu", session, "0")
         self.assertEqual(next_state, "goodbye")
+        self.assertEqual(context, {})
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(state="main_menu", language="en", context={})
@@ -274,6 +310,50 @@ class GoodbyeTests(TestCase):
         text, ended = menus.render_goodbye(session)
         self.assertIn("Thank you", text)
         self.assertTrue(ended)
+
+
+class GlobalExitTests(TestCase):
+    def test_exit_from_situation_list_ends_session(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        next_state, context = menus.transition_state("situation_list", session, "0")
+        self.assertEqual(next_state, "goodbye")
+        self.assertEqual(context, {})
+
+    def test_exit_from_topic_detail_ends_session(self):
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "topic-a",
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_state("topic_detail", session, "0")
+        self.assertEqual(next_state, "goodbye")
+
+    def test_exit_from_action_steps_ends_session(self):
+        session = UssdSession(
+            state="action_steps",
+            language="en",
+            context={
+                "situation_slug": "eviction",
+                "topic_slug": "topic-a",
+                "step_index": 0,
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_state("action_steps", session, "0")
+        self.assertEqual(next_state, "goodbye")
+
+    def test_exit_from_language_select_ends_session(self):
+        session = UssdSession(state="language_select", language="", context={})
+        next_state, context = menus.transition_state(
+            "language_select", session, "0"
+        )
+        self.assertEqual(next_state, "goodbye")
 
 
 from apps.rights.models import RightsTopic, Situation, SituationRightsTopic
@@ -305,6 +385,14 @@ class SituationListTests(TestCase):
         self.assertIn("1. ", text)
         self.assertIn("8.", text)
 
+    def test_render_shows_exit_and_back_options(self):
+        session = UssdSession(
+            state="situation_list", language="en", context={"page": 0}
+        )
+        text, ended = menus.render_situation_list(session)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
     def test_transition_next_page_advances_past_shown_items(self):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
@@ -321,6 +409,8 @@ class SituationListTests(TestCase):
         )
         text, ended = menus.render_situation_list(session)
         self.assertIn("No situations", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
 
     def test_transition_selects_situation_with_single_topic_skips_to_topic(self):
         situation = self.situations[0]
@@ -364,14 +454,14 @@ class SituationListTests(TestCase):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
         )
-        next_state, context = menus.transition_situation_list(session, "0")
+        next_state, context = menus.transition_situation_list(session, "9")
         self.assertEqual(next_state, "main_menu")
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(
             state="situation_list", language="en", context={"page": 0}
         )
-        self.assertIsNone(menus.transition_situation_list(session, "9"))
+        self.assertIsNone(menus.transition_situation_list(session, "20"))
 
 
 class SituationDetailTests(TestCase):
@@ -423,6 +513,8 @@ class SituationDetailTests(TestCase):
         text, ended = menus.render_situation_detail(session)
         self.assertIn("1. Topic A", text)
         self.assertIn("2. Topic B", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_last_chunk_does_not_end_session(self):
@@ -465,13 +557,33 @@ class SituationDetailTests(TestCase):
         self.assertEqual(next_state, "topic_detail")
         self.assertEqual(context["topic_slug"], "topic-a")
 
+    def test_transition_topics_stage_back_returns_to_situation_list(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "stage": "topics", "page": 0},
+        )
+        next_state, context = menus.transition_situation_detail(session, "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
     def test_transition_back_returns_to_situation_list(self):
         session = UssdSession(
             state="situation_detail",
             language="en",
             context={"situation_slug": "eviction", "chunk_index": 9999},
         )
-        next_state, context = menus.transition_situation_detail(session, "0")
+        next_state, context = menus.transition_situation_detail(session, "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
+    def test_transition_back_returns_to_situation_list_before_last_chunk(self):
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "eviction", "chunk_index": 0},
+        )
+        next_state, context = menus.transition_situation_detail(session, "9")
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
 
@@ -564,8 +676,8 @@ class SituationDetailTests(TestCase):
         )
         text, ended = menus.render_situation_detail(session)
         # The description body chunk (everything before the blank-line separator
-        # and the short "1. Continue\n0. Back" trailing) should be a substantial
-        # fraction of the screen budget, not a ~16-character fragment.
+        # and the short "1. Continue\n9. Back\n0. Exit" trailing) should be a
+        # substantial fraction of the screen budget, not a ~16-character fragment.
         body = text.split("\n\n")[0]
         self.assertGreater(len(body), 100)
 
@@ -600,7 +712,7 @@ class SituationDetailTests(TestCase):
         The description body budget for situation_detail is 139 chars, so the
         98-char URL above never exercises the hard-split path. Use a token that
         genuinely exceeds the budget: without _wrap_words' hard split this
-        renders a single ~321-char screen and loses the "0. Back" option.
+        renders a single ~321-char screen and loses the "9. Back" option.
         """
         self.situation.description = "See this resource: https://example.org/" + (
             "z" * 280
@@ -618,7 +730,7 @@ class SituationDetailTests(TestCase):
             self.assertLessEqual(
                 len(text), 182, f"chunk_index={chunk_index} produced {len(text)} chars"
             )
-            self.assertIn("0. Back", text)
+            self.assertIn("9. Back", text)
             seen_chunks += 1
         self.assertGreater(seen_chunks, 0)
 
@@ -633,6 +745,18 @@ class SituationDetailTests(TestCase):
         next_state, context = menus._back_from_topic("eviction", "topic-a")
         self.assertEqual(next_state, "situation_list")
         self.assertEqual(context, {"page": 0})
+
+    def test_render_with_no_linked_topics_shows_back_and_exit(self):
+        Situation.objects.create(slug="no-topics-situation", title="No Topics")
+        session = UssdSession(
+            state="situation_detail",
+            language="en",
+            context={"situation_slug": "no-topics-situation", "chunk_index": 9999},
+        )
+        text, ended = menus.render_situation_detail(session)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+        self.assertFalse(ended)
 
 
 from apps.rights.models import ActionStep, SafetyResponse
@@ -664,6 +788,8 @@ class TopicDetailTests(TestCase):
         text, ended = menus.render_topic_detail(self._session(9999))
         self.assertIn("1. Action steps", text)
         self.assertIn("2. Support contacts", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
 
     def test_transition_selects_action_steps(self):
         next_state, context = menus.transition_topic_detail(
@@ -681,7 +807,13 @@ class TopicDetailTests(TestCase):
 
     def test_transition_back_with_no_situation_returns_situation_list(self):
         next_state, context = menus.transition_topic_detail(
-            self._session(9999), "0"
+            self._session(9999), "9"
+        )
+        self.assertEqual(next_state, "situation_list")
+
+    def test_transition_back_before_last_chunk_returns_situation_list(self):
+        next_state, context = menus.transition_topic_detail(
+            self._session(0), "9"
         )
         self.assertEqual(next_state, "situation_list")
 
@@ -730,11 +862,23 @@ class SafetyGateTests(TestCase):
         self.assertEqual(context["chunk_index"], 0)
 
     def test_transition_rejects_invalid_choice_on_last_chunk(self):
-        self.assertIsNone(menus.transition_safety_gate(self._session(9999), "9"))
+        self.assertIsNone(menus.transition_safety_gate(self._session(9999), "5"))
+
+    def test_transition_back_on_last_chunk_returns_via_back_from_topic(self):
+        next_state, context = menus.transition_safety_gate(self._session(9999), "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
+    def test_transition_back_before_last_chunk_returns_via_back_from_topic(self):
+        next_state, context = menus.transition_safety_gate(self._session(0), "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
 
     def test_render_last_chunk_does_not_end_session(self):
         text, ended = menus.render_safety_gate(self._session(9999))
         self.assertIn("1. Continue", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_falls_back_to_summary_when_no_safety_response(self):
@@ -788,6 +932,7 @@ class ActionStepsTests(TestCase):
         text, ended = menus.render_action_steps(self._session())
         self.assertIn("Step 1/2", text)
         self.assertIn("1.", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_last_step_has_no_next_option(self):
@@ -802,7 +947,7 @@ class ActionStepsTests(TestCase):
         self.assertEqual(context["chunk_index"], 0)
 
     def test_transition_back_returns_to_topic_detail(self):
-        next_state, context = menus.transition_action_steps(self._session(), "0")
+        next_state, context = menus.transition_action_steps(self._session(), "9")
         self.assertEqual(next_state, "topic_detail")
         self.assertEqual(context["chunk_index"], 9999)
 
@@ -810,6 +955,14 @@ class ActionStepsTests(TestCase):
         ActionStep.objects.all().delete()
         text, ended = menus.render_action_steps(self._session())
         self.assertIn("No action steps", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
+    def test_transition_back_with_no_steps_returns_to_topic_detail(self):
+        ActionStep.objects.all().delete()
+        next_state, context = menus.transition_action_steps(self._session(), "9")
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 9999)
 
 
 from apps.support.models import SupportService
@@ -846,10 +999,19 @@ class SupportContactsTests(TestCase):
         self.topic.support_services.clear()
         text, ended = menus.render_support_contacts(self._session())
         self.assertIn("No support contacts", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
+    def test_transition_back_with_no_contacts_returns_to_topic_detail(self):
+        self.topic.support_services.clear()
+        next_state, context = menus.transition_support_contacts(
+            self._session(), "9"
+        )
+        self.assertEqual(next_state, "topic_detail")
 
     def test_transition_back_returns_to_topic_detail(self):
         next_state, context = menus.transition_support_contacts(
-            self._session(), "0"
+            self._session(), "9"
         )
         self.assertEqual(next_state, "topic_detail")
         self.assertEqual(context["chunk_index"], 9999)
@@ -881,13 +1043,20 @@ class EmergencyListTests(TestCase):
         self.assertNotIn("Regular Clinic", text)
 
     def test_transition_back_returns_to_main_menu(self):
-        next_state, context = menus.transition_emergency_list(self._session(), "0")
+        next_state, context = menus.transition_emergency_list(self._session(), "9")
         self.assertEqual(next_state, "main_menu")
 
     def test_render_with_no_emergency_contacts_shows_empty_message(self):
         SupportService.objects.all().delete()
         text, ended = menus.render_emergency_list(self._session())
         self.assertIn("No emergency contacts", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
+    def test_transition_back_with_no_contacts_returns_to_main_menu(self):
+        SupportService.objects.all().delete()
+        next_state, context = menus.transition_emergency_list(self._session(), "9")
+        self.assertEqual(next_state, "main_menu")
 
     def test_render_last_chunk_does_not_end_session(self):
         text, ended = menus.render_emergency_list(self._session(9999))
@@ -931,6 +1100,18 @@ class HandleUssdRequestTests(TestCase):
 
         self.assertTrue(response.startswith("END "))
         session = UssdSession.objects.get(session_id="sess-3")
+        self.assertFalse(session.is_active)
+
+    def test_exit_from_mid_flow_ends_session(self):
+        handle_ussd_request("sess-exit-midflow", "+256700000000", "")
+        handle_ussd_request("sess-exit-midflow", "+256700000000", "1")
+        handle_ussd_request("sess-exit-midflow", "+256700000000", "1*1")
+        response = handle_ussd_request(
+            "sess-exit-midflow", "+256700000000", "1*1*0"
+        )
+
+        self.assertTrue(response.startswith("END "))
+        session = UssdSession.objects.get(session_id="sess-exit-midflow")
         self.assertFalse(session.is_active)
 
     def test_invalid_input_redisplays_screen_with_prefix(self):
@@ -1011,8 +1192,10 @@ class HandleUssdRequestTests(TestCase):
         self.assertEqual(session.state, "situation_detail")
         self.assertEqual(session.context.get("chunk_index"), 0)
 
-        # Invalid attempt in situation_detail (only "1" for More is valid)
-        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9")
+        # Invalid attempt in situation_detail (only "1" for More and "9" for
+        # Back are valid on a non-last chunk; use "7" as the invalid digit
+        # since Task 3 made "9" a valid Back input on this screen)
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*7")
         session.refresh_from_db()
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertEqual(session.state, "situation_detail")
@@ -1020,7 +1203,7 @@ class HandleUssdRequestTests(TestCase):
 
         # Valid navigation: "1" for More (this spreads context including attempts)
         # The fix should strip the attempts key from next_context before persisting
-        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9*1")
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*7*1")
         session.refresh_from_db()
         self.assertNotIn("attempts", session.context)
         self.assertEqual(session.state, "situation_detail")
@@ -1029,7 +1212,7 @@ class HandleUssdRequestTests(TestCase):
 
         # Another invalid attempt should count as 1, not 2
         # (because attempts was stripped from context on the previous valid transition)
-        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*9*1*9")
+        handle_ussd_request("sess-attempts", "+256700000000", "1*1*1*7*1*7")
         session.refresh_from_db()
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertTrue(session.is_active)
@@ -1155,6 +1338,26 @@ class UssdCallbackViewTests(TestCase):
     def test_get_not_allowed(self):
         response = self.client.get(reverse("ussd-callback"))
         self.assertEqual(response.status_code, 405)
+
+
+class SeededTranslationCopyTests(TestCase):
+    def test_luganda_topic_menu_uses_nine_for_back(self):
+        self.assertIn("9. Ddayo", menus.get_copy("ussd.topic_menu", "lg"))
+
+    def test_luganda_exit_copy_is_seeded(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "lg"), "Fuluma")
+
+    def test_kiswahili_continue_uses_nine_for_back(self):
+        self.assertIn("9. Rudi", menus.get_copy("ussd.continue", "sw"))
+
+    def test_kiswahili_exit_copy_is_seeded(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "sw"), "Toka")
+
+    def test_runyankole_safety_continue_uses_nine_for_back(self):
+        self.assertIn("9. Garuka", menus.get_copy("ussd.safety_continue", "nyn"))
+
+    def test_runyankole_exit_copy_is_seeded(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "nyn"), "Rugamu")
 
 
 class UnreviewedNoticeTests(TestCase):

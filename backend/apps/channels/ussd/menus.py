@@ -24,9 +24,9 @@ DEFAULT_COPY = {
     "ussd.no_situations": "No situations are available right now.",
     "ussd.choose_situation": "Choose a situation:",
     "ussd.related_rights": "Related rights:",
-    "ussd.topic_menu": "1. Action steps\n2. Support contacts\n0. Back",
-    "ussd.safety_continue": "1. Continue\n0. Back",
-    "ussd.continue": "1. Continue\n0. Back",
+    "ussd.topic_menu": "1. Action steps\n2. Support contacts\n9. Back",
+    "ussd.safety_continue": "1. Continue\n9. Back",
+    "ussd.continue": "1. Continue\n9. Back",
     "ussd.no_action_steps": (
         "No action steps are available for this topic."
     ),
@@ -37,6 +37,7 @@ DEFAULT_COPY = {
     "ussd.more": "More",
     "ussd.back": "Back",
     "ussd.next": "Next",
+    "ussd.exit": "Exit",
     "ussd.unreviewed_notice": "Note: not yet reviewed.",
 }
 
@@ -120,11 +121,12 @@ def paginate_items(items, page, page_size=PAGE_SIZE):
 def render_language_select(session):
     body = get_copy("ussd.welcome", session.language)
     prompt = get_copy("ussd.language_prompt", session.language)
+    exit_line = f"0. {get_copy('ussd.exit', session.language)}"
     if session.context.get("unavailable_notice"):
         requested = session.context.get("requested_language", session.language)
         notice = get_copy("ussd.language_unavailable", requested)
-        return f"{notice}\n\n{body}\n{prompt}", False
-    return f"{body}\n{prompt}", False
+        return f"{notice}\n\n{body}\n{prompt}\n{exit_line}", False
+    return f"{body}\n{prompt}\n{exit_line}", False
 
 
 def transition_language_select(session, user_input):
@@ -154,8 +156,6 @@ def transition_main_menu(session, user_input):
         return "situation_list", {"page": 0}
     if user_input == "2":
         return "emergency_list", {"chunk_index": 0}
-    if user_input == "0":
-        return "goodbye", {}
     return None
 
 
@@ -191,8 +191,12 @@ def _enter_topic(situation_slug, topic):
 def _chunked_screen(text, chunk_index, trailing_options, language):
     more = get_copy("ussd.more", language)
     back = get_copy("ussd.back", language)
-    more_back = f"1. {more}\n0. {back}"
-    reserved = max(len(trailing_options), len(more_back))
+    exit_line = f"0. {get_copy('ussd.exit', language)}"
+    more_back = f"1. {more}\n9. {back}\n{exit_line}"
+    final_trailing = (
+        f"{trailing_options}\n{exit_line}" if trailing_options else exit_line
+    )
+    reserved = max(len(final_trailing), len(more_back))
     body_budget = max(SCREEN_BUDGET - reserved - 2, 20)
 
     chunks = chunk_text(text, budget=body_budget) if text else [""]
@@ -200,7 +204,7 @@ def _chunked_screen(text, chunk_index, trailing_options, language):
     body = chunks[chunk_index]
     is_last = chunk_index == len(chunks) - 1
     if is_last:
-        screen = f"{body}\n\n{trailing_options}" if trailing_options else body
+        screen = f"{body}\n\n{final_trailing}"
     else:
         screen = f"{body}\n\n{more_back}"
     return screen, is_last
@@ -227,8 +231,14 @@ def _situation_list_page(session):
     back = get_copy("ussd.back", session.language)
     header = get_copy("ussd.choose_situation", session.language)
     more_label = get_copy("ussd.more", session.language)
+    exit_label = get_copy("ussd.exit", session.language)
 
-    reserved = len(header) + 1 + len(f"8. {more_label}") + 1 + len(f"0. {back}") + 2
+    reserved = (
+        len(header) + 1
+        + len(f"8. {more_label}") + 1
+        + len(f"9. {back}") + 1
+        + len(f"0. {exit_label}") + 2
+    )
     budget = max(SCREEN_BUDGET - reserved, 20)
 
     lines, shown, next_index, has_more = _fit_numbered_lines(
@@ -245,15 +255,17 @@ def render_situation_list(session):
     situations, header, lines, shown, next_index, has_more, back, more_label = (
         _situation_list_page(session)
     )
+    exit_label = get_copy("ussd.exit", session.language)
 
     if not situations:
         body = get_copy("ussd.no_situations", session.language)
-        return f"{body}\n\n0. {back}", False
+        return f"{body}\n\n9. {back}\n0. {exit_label}", False
 
     screen_lines = [header] + lines
     if has_more:
         screen_lines.append(f"8. {more_label}")
-    screen_lines.append(f"0. {back}")
+    screen_lines.append(f"9. {back}")
+    screen_lines.append(f"0. {exit_label}")
     return "\n".join(screen_lines), False
 
 
@@ -262,7 +274,7 @@ def transition_situation_list(session, user_input):
         _situation_list_page(session)
     )
 
-    if user_input == "0":
+    if user_input == "9":
         return "main_menu", {}
     if user_input == "8" and has_more:
         return "situation_list", {"page": next_index}
@@ -292,7 +304,7 @@ def render_situation_detail(session):
 
     topics = list(_topics_for_situation(situation)[:9])
     back = get_copy("ussd.back", session.language)
-    trailing = get_copy("ussd.continue", session.language) if topics else f"0. {back}"
+    trailing = get_copy("ussd.continue", session.language) if topics else f"9. {back}"
 
     chunk_index = session.context.get("chunk_index", 0)
     text = situation.description or situation.title
@@ -312,7 +324,7 @@ def transition_situation_detail(session, user_input):
 
     topics = list(_topics_for_situation(situation)[:9])
     back = get_copy("ussd.back", session.language)
-    trailing = get_copy("ussd.continue", session.language) if topics else f"0. {back}"
+    trailing = get_copy("ussd.continue", session.language) if topics else f"9. {back}"
 
     chunk_index = session.context.get("chunk_index", 0)
     text = situation.description or situation.title
@@ -324,11 +336,11 @@ def transition_situation_detail(session, user_input):
                 "situation_detail",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return "situation_list", {"page": 0}
         return None
 
-    if user_input == "0":
+    if user_input == "9":
         return "situation_list", {"page": 0}
     if topics and user_input == "1":
         return (
@@ -347,8 +359,14 @@ def _situation_topics_page(session, topics):
     back = get_copy("ussd.back", session.language)
     header = get_copy("ussd.related_rights", session.language)
     more_label = get_copy("ussd.more", session.language)
+    exit_label = get_copy("ussd.exit", session.language)
 
-    reserved = len(header) + 1 + len(f"8. {more_label}") + 1 + len(f"0. {back}") + 2
+    reserved = (
+        len(header) + 1
+        + len(f"8. {more_label}") + 1
+        + len(f"9. {back}") + 1
+        + len(f"0. {exit_label}") + 2
+    )
     budget = max(SCREEN_BUDGET - reserved, 20)
 
     lines, shown, next_index, has_more = _fit_numbered_lines(
@@ -369,7 +387,8 @@ def _render_situation_topics(session, situation):
     screen_lines = [header] + lines
     if has_more:
         screen_lines.append(f"8. {more_label}")
-    screen_lines.append(f"0. {back}")
+    screen_lines.append(f"9. {back}")
+    screen_lines.append(f"0. {get_copy('ussd.exit', session.language)}")
     return "\n".join(screen_lines), False
 
 
@@ -379,7 +398,7 @@ def _transition_situation_topics(session, user_input, situation):
         _situation_topics_page(session, topics)
     )
 
-    if user_input == "0":
+    if user_input == "9":
         return "situation_list", {"page": 0}
     if user_input == "8" and has_more:
         return (
@@ -461,7 +480,7 @@ def transition_topic_detail(session, user_input):
                 "topic_detail",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_from_topic(situation_slug, topic_slug)
         return None
 
@@ -484,7 +503,7 @@ def transition_topic_detail(session, user_input):
                 "chunk_index": 0,
             },
         )
-    if user_input == "0":
+    if user_input == "9":
         return _back_from_topic(situation_slug, topic_slug)
     return None
 
@@ -529,7 +548,7 @@ def transition_safety_gate(session, user_input):
                 "safety_gate",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_from_topic(situation_slug, topic_slug)
         return None
 
@@ -542,7 +561,7 @@ def transition_safety_gate(session, user_input):
                 "chunk_index": 0,
             },
         )
-    if user_input == "0":
+    if user_input == "9":
         return _back_from_topic(situation_slug, topic_slug)
     return None
 
@@ -560,7 +579,8 @@ def render_action_steps(session):
     back_label = get_copy("ussd.back", session.language)
     if not steps:
         body = get_copy("ussd.no_action_steps", session.language)
-        return f"{body}\n\n0. {back_label}", False
+        exit_label = get_copy("ussd.exit", session.language)
+        return f"{body}\n\n9. {back_label}\n0. {exit_label}", False
 
     step_index = min(session.context.get("step_index", 0), len(steps) - 1)
     step = steps[step_index]
@@ -570,9 +590,9 @@ def render_action_steps(session):
     has_next = step_index + 1 < len(steps)
     if has_next:
         next_label = get_copy("ussd.next", session.language)
-        trailing = f"1. {next_label}\n0. {back_label}"
+        trailing = f"1. {next_label}\n9. {back_label}"
     else:
-        trailing = f"0. {back_label}"
+        trailing = f"9. {back_label}"
 
     screen, _ = _chunked_screen(text, chunk_index, trailing, session.language)
     return screen, False
@@ -589,7 +609,7 @@ def transition_action_steps(session, user_input):
         topic.action_steps.filter(is_active=True).order_by("order", "id")
     )
     if not steps:
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
@@ -601,9 +621,9 @@ def transition_action_steps(session, user_input):
     back_label = get_copy("ussd.back", session.language)
     if has_next:
         next_label = get_copy("ussd.next", session.language)
-        trailing = f"1. {next_label}\n0. {back_label}"
+        trailing = f"1. {next_label}\n9. {back_label}"
     else:
-        trailing = f"0. {back_label}"
+        trailing = f"9. {back_label}"
     _, is_last = _chunked_screen(text, chunk_index, trailing, session.language)
 
     if not is_last:
@@ -612,7 +632,7 @@ def transition_action_steps(session, user_input):
                 "action_steps",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
@@ -626,7 +646,7 @@ def transition_action_steps(session, user_input):
                 "chunk_index": 0,
             },
         )
-    if user_input == "0":
+    if user_input == "9":
         return _back_to_topic_detail(situation_slug, topic_slug)
     return None
 
@@ -651,11 +671,12 @@ def render_support_contacts(session):
 
     services = list(topic.support_services.filter(is_active=True).order_by("name"))
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
 
     if not services:
         body = get_copy("ussd.no_support_contacts", session.language)
-        return f"{body}\n\n{back}", False
+        exit_label = get_copy("ussd.exit", session.language)
+        return f"{body}\n\n{back}\n0. {exit_label}", False
 
     screen, _ = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
@@ -672,12 +693,12 @@ def transition_support_contacts(session, user_input):
 
     services = list(topic.support_services.filter(is_active=True).order_by("name"))
     if not services:
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
     _, is_last = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
     )
@@ -688,11 +709,11 @@ def transition_support_contacts(session, user_input):
                 "support_contacts",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
-    if user_input == "0":
+    if user_input == "9":
         return _back_to_topic_detail(situation_slug, topic_slug)
     return None
 
@@ -704,11 +725,12 @@ def render_emergency_list(session):
         ).order_by("name")
     )
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
 
     if not services:
         body = get_copy("ussd.no_emergency_contacts", session.language)
-        return f"{body}\n\n{back}", False
+        exit_label = get_copy("ussd.exit", session.language)
+        return f"{body}\n\n{back}\n0. {exit_label}", False
 
     screen, _ = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
@@ -723,12 +745,12 @@ def transition_emergency_list(session, user_input):
         ).order_by("name")
     )
     if not services:
-        if user_input == "0":
+        if user_input == "9":
             return "main_menu", {}
         return None
 
     chunk_index = session.context.get("chunk_index", 0)
-    back = f"0. {get_copy('ussd.back', session.language)}"
+    back = f"9. {get_copy('ussd.back', session.language)}"
     _, is_last = _chunked_screen(
         _format_contacts(services), chunk_index, back, session.language
     )
@@ -739,11 +761,11 @@ def transition_emergency_list(session, user_input):
                 "emergency_list",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return "main_menu", {}
         return None
 
-    if user_input == "0":
+    if user_input == "9":
         return "main_menu", {}
     return None
 
@@ -779,4 +801,6 @@ def render_state(state, session):
 
 
 def transition_state(state, session, user_input):
+    if user_input == "0" and state != "goodbye":
+        return "goodbye", {}
     return TRANSITION_HANDLERS[state](session, user_input)
