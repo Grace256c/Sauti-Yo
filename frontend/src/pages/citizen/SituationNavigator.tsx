@@ -13,7 +13,6 @@ import {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 
 import {
   rightsCategories,
@@ -29,7 +28,6 @@ import type {
 
 
 export default function SituationNavigator() {
-  const { t } = useTranslation();
   const [concern, setConcern] = useState("");
   const [result, setResult] =
     useState<ConcernAnalysisResponse | null>(null);
@@ -288,7 +286,7 @@ export default function SituationNavigator() {
                 <div className="flex flex-wrap items-start justify-between gap-5">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-                      {t("rights.relevantSituation")}
+                      Relevant situation
                     </p>
 
                     <h2 className="heading-serif mt-3 text-3xl font-semibold text-text-primary sm:text-4xl">
@@ -302,7 +300,7 @@ export default function SituationNavigator() {
 
                   <div className="flex items-center gap-2 border border-border px-3 py-2 text-xs font-semibold text-text-secondary">
                     <CheckCircle2 className="h-4 w-4 text-gold" />
-                    {t("rights.groundedMatch")}
+                    Grounded match
                   </div>
                 </div>
               </div>
@@ -315,7 +313,7 @@ export default function SituationNavigator() {
 
                     <div>
                       <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-                        {t("rights.safetyFirst")}
+                        Safety first
                       </p>
 
                       {safetyResponses.map((response) => (
@@ -340,7 +338,7 @@ export default function SituationNavigator() {
                   />
 
                   <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-                    {t("rights.whatMayBeRelevant")}
+                    What may be relevant
                   </p>
 
                   <h2 className="heading-serif mt-4 text-3xl font-semibold text-text-primary">
@@ -355,7 +353,7 @@ export default function SituationNavigator() {
                 {/* LEGAL BASIS */}
                 <div>
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-                    {t("rights.legalBasis")}
+                    Legal basis
                   </p>
 
                   <div className="mt-4 space-y-4">
@@ -376,8 +374,8 @@ export default function SituationNavigator() {
                             <span className="border border-border px-2 py-1 text-xs font-semibold text-text-secondary">
                               {provision.verification_status ===
                               "verified"
-                                ? t("rights.verified")
-                                : t("rights.reviewRequired")}
+                                ? "Verified"
+                                : "Review required"}
                             </span>
                           </div>
 
@@ -408,7 +406,7 @@ export default function SituationNavigator() {
                               rel="noreferrer"
                               className="mt-5 inline-flex text-sm font-semibold text-gold-deep underline underline-offset-4 dark:text-gold"
                             >
-                              {t("rights.viewLegalSource")}
+                              View legal source
                             </a>
                           )}
                         </article>
@@ -427,7 +425,7 @@ export default function SituationNavigator() {
               {actionSteps.length > 0 && (
                 <div className="mt-14 border-t border-border pt-10">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-                    {t("rights.practicalNextSteps")}
+                    Practical next steps
                   </p>
 
                   <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -464,7 +462,7 @@ export default function SituationNavigator() {
               {supportServices.length > 0 && (
                 <div className="mt-14 border-t border-border pt-10">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-                    {t("rights.supportRelevant")}
+                    Support that may be relevant
                   </p>
 
                   <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -485,7 +483,7 @@ export default function SituationNavigator() {
 
                         {service.is_emergency_service && (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary">
-                            {t("rights.emergencySupport")}
+                            Emergency / urgent support
                           </p>
                         )}
                       </article>
@@ -496,7 +494,7 @@ export default function SituationNavigator() {
                     to="/support"
                     className="btn-secondary mt-6 inline-flex"
                   >
-                    {t("rights.exploreSupport")}
+                    Explore Support Options
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
@@ -517,7 +515,7 @@ export default function SituationNavigator() {
                   className="btn-secondary mt-6 inline-flex"
                 >
                   <ArrowLeft className="h-4 w-4" />
-                  {t("rights.analyseAnother")}
+                  Analyse another concern
                 </button>
               </div>
             </div>
@@ -530,11 +528,11 @@ export default function SituationNavigator() {
         <div className="site-container">
           <div className="mb-10 max-w-2xl">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-              {t("rights.guidedRoute")}
+              Prefer the guided route?
             </p>
 
             <h2 className="heading-serif mt-3 text-3xl font-semibold text-text-primary sm:text-4xl">
-              {t("rights.chooseSituation")}
+              Choose the closest situation.
             </h2>
 
             <p className="mt-4 text-sm leading-6 text-text-secondary sm:text-base">
@@ -582,7 +580,7 @@ export default function SituationNavigator() {
                   </div>
 
                   <span className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-semibold text-gold-deep transition-all duration-300 group-hover:gap-3 dark:text-gold">
-                    {t("rights.soundsClosest")}
+                    This sounds closest
 
                     <ArrowRight className="h-4 w-4" />
                   </span>
@@ -598,11 +596,11 @@ export default function SituationNavigator() {
         <div className="site-container">
           <div className="mx-auto max-w-3xl text-center">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
-              {t("rights.stillUnsure")}
+              Still unsure?
             </p>
 
             <h2 className="heading-serif mt-4 text-2xl font-semibold text-text-primary sm:text-3xl">
-              {t("rights.startClosest")}
+              Start with the closest option.
             </h2>
 
             <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-text-secondary sm:text-base">
@@ -624,9 +622,9 @@ export default function SituationNavigator() {
               </p>
 
               <h2 className="heading-serif mt-4 text-3xl font-semibold sm:text-4xl">
-                {t("rights.startExperience")}
+                Start with your experience.
                 <span className="block text-gold">
-                  {t("rights.connectRights")}
+                  We’ll connect it to rights information.
                 </span>
               </h2>
             </div>
@@ -635,7 +633,7 @@ export default function SituationNavigator() {
               to="/rights"
               className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-gold px-7 py-3 font-semibold text-gold transition hover:bg-gold hover:text-[#191919] sm:w-auto"
             >
-              {t("rights.viewCategories")}
+              View All Categories
 
               <ArrowRight className="h-4 w-4" />
             </Link>

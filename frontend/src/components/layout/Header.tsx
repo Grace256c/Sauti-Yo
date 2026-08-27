@@ -4,10 +4,7 @@ import {
   NavLink,
   useLocation,
 } from "react-router-dom";
-import { useTranslation } from "react-i18next";
 import {
-  ChevronDown,
-  Globe2,
   Menu,
   Moon,
   Sun,
@@ -17,25 +14,17 @@ import {
 import logo from "../../assets/branding/sauti-yo-logo-horizontal.png";
 import logoLight from "../../assets/branding/sauti-yo-logo-light.png";
 
-const languages = [
-  { code: "en", label: "English" },
-  { code: "lg", label: "Luganda" },
-  { code: "sw", label: "Kiswahili" },
-  { code: "nyn", label: "Runyankole" },
-];
-
 const navigation = [
-  { to: "/", key: "nav.home" },
-  { to: "/about", key: "nav.about" },
-  { to: "/rights", key: "nav.rights" },
-  { to: "/how-it-works", key: "nav.howItWorks" },
-  { to: "/access", key: "nav.access" },
-  { to: "/community", key: "nav.community" },
-  { to: "/support", key: "nav.support" },
+  { to: "/", label: "Home" },
+  { to: "/about", label: "About" },
+  { to: "/rights", label: "Know Your Rights" },
+  { to: "/how-it-works", label: "How It Works" },
+  { to: "/access", label: "Access" },
+  { to: "/community", label: "Community Voice" },
+  { to: "/support", label: "Find Support" },
 ];
 
 export default function Header() {
-  const { t, i18n } = useTranslation();
   const location = useLocation();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -85,11 +74,6 @@ export default function Header() {
     );
   };
 
-  const changeLanguage = (language: string) => {
-    i18n.changeLanguage(language);
-    setMobileOpen(false);
-  };
-
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-surface/95 shadow-[0_4px_20px_rgba(0,0,0,0.04)] backdrop-blur-md">
       <div className="site-container flex min-h-[74px] items-center justify-between gap-4">
@@ -133,7 +117,7 @@ export default function Header() {
                       isActive ? "-translate-y-0.5" : ""
                     }`}
                   >
-                    {t(item.key)}
+                    {item.label}
                   </span>
 
                   <span
@@ -151,31 +135,6 @@ export default function Header() {
 
         {/* Desktop actions */}
         <div className="hidden shrink-0 items-center gap-2 lg:flex">
-          <div className="relative">
-            <Globe2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-
-            <select
-              value={i18n.language}
-              onChange={(event) =>
-                changeLanguage(event.target.value)
-              }
-              aria-label="Select language"
-              className="h-11 min-w-[132px] appearance-none rounded-md border border-border bg-surface py-2 pl-9 pr-9 text-sm font-medium text-text-primary outline-none transition-all duration-200 hover:border-gold focus:border-gold focus:ring-2 focus:ring-gold/25"
-            >
-              {languages.map((language) => (
-                <option
-                  key={language.code}
-                  value={language.code}
-                  className="bg-surface text-text-primary"
-                >
-                  {language.label}
-                </option>
-              ))}
-            </select>
-
-            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-          </div>
-
           <button
             type="button"
             onClick={toggleTheme}
@@ -202,7 +161,7 @@ export default function Header() {
             to="/rights"
             className="btn-primary ml-1 whitespace-nowrap"
           >
-            {t("common.startHere")}
+            Start Here
           </NavLink>
         </div>
 
@@ -271,49 +230,18 @@ export default function Header() {
                         <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 bg-gold" />
                       )}
 
-                      {t(item.key)}
+                      {item.label}
                     </>
                   )}
                 </NavLink>
               ))}
             </nav>
 
-            <div className="mt-5">
-              <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
-                <Globe2 className="h-4 w-4" />
-                {t("common.language")}
-              </p>
-
-              <div className="grid grid-cols-2 gap-2">
-                {languages.map((language) => {
-                  const active =
-                    i18n.language === language.code;
-
-                  return (
-                    <button
-                      key={language.code}
-                      type="button"
-                      onClick={() =>
-                        changeLanguage(language.code)
-                      }
-                      className={`min-h-11 rounded-md border px-3 py-2 text-left text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gold/25 ${
-                        active
-                          ? "border-gold bg-gold/10 text-gold-deep dark:text-gold"
-                          : "border-border bg-surface text-text-secondary hover:border-gold hover:bg-gold/5 hover:text-gold"
-                      }`}
-                    >
-                      {language.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             <NavLink
               to="/rights"
               className="btn-primary mt-5 w-full"
             >
-              {t("common.startHere")}
+              Start Here
             </NavLink>
           </div>
         </div>
