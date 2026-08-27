@@ -1363,6 +1363,52 @@ class ReferralConsentFlowTests(TestCase):
         self.assertEqual(referral.district, "Kampala")
 
     @patch("apps.channels.sms.handler.send_sms")
+    def test_lowercase_district_still_matches_and_creates_referral(self, mock_send):
+        # Citizens type districts freehand over SMS; find_matching_organisations
+        # matches districts_served exactly and case-sensitively, so the handler
+        # normalises to the canonical Title-Case vocabulary before matching.
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+            language="en",
+        )
+        handle_sms_request("+256700000000", "kampala")
+        message = mock_send.call_args[0][1]
+        self.assertIn("Referral Flow Test Partner", message)
+        self.assertIn("SY-REF-", message)
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+
+        referral = Referral.objects.get(organisation=self.organisation)
+        self.assertEqual(referral.contact_phone, "+256700000000")
+        self.assertEqual(referral.district, "Kampala")
+
+    @patch("apps.channels.sms.handler.send_sms")
+    def test_send_failure_after_referral_creation_still_clears_pending_step(
+        self, mock_send
+    ):
+        # send_sms raises on failure and the webhook view swallows it, so the
+        # pending step must already be cleared by the time the confirmation
+        # send is attempted - otherwise the citizen's natural retry would
+        # re-enter the district branch and create a duplicate Referral.
+        mock_send.side_effect = Exception("simulated AT API failure")
+        SmsContext.objects.create(
+            phone_number="+256700000000",
+            last_situation_slug="problem-at-work",
+            pending_referral_step="district",
+            language="en",
+        )
+
+        with self.assertRaises(Exception) as raised:
+            handle_sms_request("+256700000000", "Kampala")
+        self.assertEqual(str(raised.exception), "simulated AT API failure")
+
+        context = SmsContext.objects.get(phone_number="+256700000000")
+        self.assertEqual(context.pending_referral_step, "")
+        self.assertEqual(Referral.objects.count(), 1)
+
+    @patch("apps.channels.sms.handler.send_sms")
     def test_district_no_match_falls_back_to_raw_support_reply(self, mock_send):
         SmsContext.objects.create(
             phone_number="+256700000000",
