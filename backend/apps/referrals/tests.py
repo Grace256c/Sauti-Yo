@@ -9,11 +9,17 @@ from apps.partners.models import (
     PartnerVerificationRequest,
 )
 from apps.support.models import SupportService
+from apps.rights.models import (
+    RightsTopic,
+    Situation,
+    SituationRightsTopic,
+)
 
 from .models import (
     Referral,
     ReferralStatusHistory,
 )
+from .services import create_citizen_referral
 
 
 User = get_user_model()
@@ -342,3 +348,101 @@ class ReferralGenerateReferenceTests(TestCase):
         second = Referral.generate_reference()
 
         self.assertNotEqual(first, second)
+
+
+class CreateCitizenReferralServiceTests(TestCase):
+    def setUp(self):
+        self.situation = Situation.objects.create(
+            slug="facing-eviction",
+            title="Facing eviction",
+            risk_level="standard",
+        )
+
+        self.topic = RightsTopic.objects.create(
+            slug="eviction-housing",
+            title="Eviction & Housing Rights",
+            summary="Protections around eviction and housing.",
+            risk_level="standard",
+        )
+
+        SituationRightsTopic.objects.create(
+            situation=self.situation,
+            rights_topic=self.topic,
+        )
+
+        service = SupportService.objects.create(
+            name="Eviction Referral Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        self.organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+            is_test=False,
+        )
+
+        PartnerServiceConfiguration.objects.create(
+            organisation=self.organisation,
+            rights_categories=["eviction-housing"],
+            languages=["en"],
+            support_channels=["phone"],
+            districts_served=["Kampala"],
+            accepting_referrals=True,
+        )
+
+        PartnerVerificationRequest.objects.create(
+            organisation=self.organisation,
+            status="verified",
+        )
+
+    def test_creates_referral_when_organisation_matches(self):
+        referral = create_citizen_referral(
+            phone_number="+256700000001",
+            situation_slug="facing-eviction",
+            district="Kampala",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNotNone(referral)
+        self.assertEqual(referral.organisation, self.organisation)
+        self.assertEqual(referral.rights_topic, self.topic)
+        self.assertEqual(referral.contact_phone, "+256700000001")
+        self.assertEqual(referral.district, "Kampala")
+        self.assertEqual(referral.language, "en")
+        self.assertEqual(referral.preferred_support_channel, "phone")
+        self.assertTrue(referral.citizen_consent_to_share)
+        self.assertEqual(referral.status, "new")
+        self.assertTrue(referral.reference.startswith("SY-REF-"))
+        self.assertIn("Facing eviction", referral.summary)
+
+        history = referral.status_history.get()
+        self.assertEqual(history.to_status, "new")
+        self.assertIn("sms", history.note)
+
+    def test_returns_none_when_no_organisation_matches(self):
+        referral = create_citizen_referral(
+            phone_number="+256700000002",
+            situation_slug="facing-eviction",
+            district="Gulu",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
+
+    def test_returns_none_for_unknown_situation(self):
+        referral = create_citizen_referral(
+            phone_number="+256700000003",
+            situation_slug="does-not-exist",
+            district="Kampala",
+            language="en",
+            origin_channel="sms",
+        )
+
+        self.assertIsNone(referral)
+        self.assertEqual(Referral.objects.count(), 0)
