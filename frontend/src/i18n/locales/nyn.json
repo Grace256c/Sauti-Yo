@@ -1,0 +1,29 @@
+{
+  "brand": {
+    "name": "Sauti Yo",
+    "tagline": "Manya. Kora. Hurirwa."
+  },
+  "nav": {
+    "home": "Ahaka",
+    "about": "Ebikwatiraine Naitwe",
+    "rights": "Manya Obugabe Bwawe",
+    "howItWorks": "Oku Kikora",
+    "access": "Okuheebwa Obuheereza",
+    "community": "Eiraka ry'Abantu",
+    "support": "Shaba Obuhwezi",
+    "partner": "Omukutu gw'Abakoragana Naitwe",
+    "startHere": "Tandikira Hanu"
+  },
+  "common": {
+    "language": "Orurimi",
+    "back": "Garuka",
+    "continue": "Gumizamu",
+    "learnMore": "Manya ebindi",
+    "selectLanguage": "Toorana orurimi",
+    "mainNavigation": "Menu enkuru",
+    "switchToLightMode": "Hindura ogire omushana",
+    "switchToDarkMode": "Hindura ogire omwirima",
+    "openMenu": "Igura menu",
+    "closeMenu": "Gara menu"
+  }
+}

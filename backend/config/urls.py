@@ -48,6 +48,10 @@ urlpatterns = [
         "api/channels/",
         include("apps.channels.urls"),
     ),
+    path(
+    "api/chat/",
+    include("apps.chat.urls"),
+),
 ]
 
 

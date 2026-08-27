@@ -192,14 +192,122 @@ class SafetyResponse(models.Model):
         return f"{self.rights_topic} — {self.trigger_key}"
 
 
+class RightsTopicTranslation(models.Model):
+    LANGUAGE_CHOICES = [
+        ("en", "English"),
+        ("lg", "Luganda"),
+        ("sw", "Kiswahili"),
+        ("nyn", "Runyankole"),
+    ]
+
+    rights_topic = models.ForeignKey(
+        RightsTopic,
+        on_delete=models.CASCADE,
+        related_name="translations",
+    )
+
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+    )
+
+    title = models.CharField(max_length=150)
+    summary = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["rights_topic", "language"],
+                name="unique_rights_topic_translation",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.rights_topic.slug} — {self.language}"
+
+
+class ActionStepTranslation(models.Model):
+    LANGUAGE_CHOICES = [
+        ("en", "English"),
+        ("lg", "Luganda"),
+        ("sw", "Kiswahili"),
+        ("nyn", "Runyankole"),
+    ]
+
+    action_step = models.ForeignKey(
+        ActionStep,
+        on_delete=models.CASCADE,
+        related_name="translations",
+    )
+
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+    )
+
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["action_step", "language"],
+                name="unique_action_step_translation",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.action_step_id} — {self.language}"
+
+
+class SafetyResponseTranslation(models.Model):
+    LANGUAGE_CHOICES = [
+        ("en", "English"),
+        ("lg", "Luganda"),
+        ("sw", "Kiswahili"),
+        ("nyn", "Runyankole"),
+    ]
+
+    safety_response = models.ForeignKey(
+        SafetyResponse,
+        on_delete=models.CASCADE,
+        related_name="translations",
+    )
+
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+    )
+
+    message = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["safety_response", "language"],
+                name="unique_safety_response_translation",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.safety_response_id} — {self.language}"
+
+
 class LegalProvision(models.Model):
     """
     Stores a specific legal authority supporting a RightsTopic.
 
     Legal provisions keep the authoritative legal reference separate
-    from the citizen-facing plain-language explanation. This allows
-    Sauti Yo to explain a right simply while preserving exactly where
-    that information came from.
+    from the citizen-facing plain-language explanation.
     """
 
     SOURCE_TYPE_CHOICES = [
@@ -314,6 +422,7 @@ class LegalProvision(models.Model):
             "order",
             "id",
         ]
+
         constraints = [
             models.UniqueConstraint(
                 fields=[

@@ -1,0 +1,29 @@
+{
+  "brand": {
+    "name": "Sauti Yo",
+    "tagline": "Know. Act. Be Heard."
+  },
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "rights": "Know Your Rights",
+    "howItWorks": "How It Works",
+    "access": "Access",
+    "community": "Community Voice",
+    "support": "Find Support",
+    "partner": "Partner Portal",
+    "startHere": "Start Here"
+  },
+  "common": {
+    "language": "Language",
+    "back": "Back",
+    "continue": "Continue",
+    "learnMore": "Learn more",
+    "selectLanguage": "Select language",
+    "mainNavigation": "Main navigation",
+    "switchToLightMode": "Switch to light mode",
+    "switchToDarkMode": "Switch to dark mode",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu"
+  }
+}

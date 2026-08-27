@@ -1,0 +1,29 @@
+{
+  "brand": {
+    "name": "Sauti Yo",
+    "tagline": "Jua. Chukua Hatua. Sikika."
+  },
+  "nav": {
+    "home": "Nyumbani",
+    "about": "Kuhusu Sisi",
+    "rights": "Jua Haki Zako",
+    "howItWorks": "Jinsi Inavyofanya Kazi",
+    "access": "Upatikanaji",
+    "community": "Sauti ya Jamii",
+    "support": "Pata Msaada",
+    "partner": "Tovuti ya Washirika",
+    "startHere": "Anza Hapa"
+  },
+  "common": {
+    "language": "Lugha",
+    "back": "Rudi",
+    "continue": "Endelea",
+    "learnMore": "Jifunze zaidi",
+    "selectLanguage": "Chagua lugha",
+    "mainNavigation": "Menyu kuu",
+    "switchToLightMode": "Badilisha hadi mandhari angavu",
+    "switchToDarkMode": "Badilisha hadi mandhari nyeusi",
+    "openMenu": "Fungua menyu",
+    "closeMenu": "Funga menyu"
+  }
+}
