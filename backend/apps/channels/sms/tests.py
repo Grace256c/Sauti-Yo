@@ -103,6 +103,19 @@ class SmsContextModelTests(TestCase):
         self.assertEqual(context.language, "en")
         self.assertEqual(context.last_situation_slug, "")
 
+    def test_pending_referral_step_defaults_to_blank(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000002",
+        )
+        self.assertEqual(context.pending_referral_step, "")
+
+    def test_pending_referral_step_can_be_set(self):
+        context = SmsContext.objects.create(
+            phone_number="+256700000003",
+            pending_referral_step="consent",
+        )
+        self.assertEqual(context.pending_referral_step, "consent")
+
 
 class MatchNotSafeAnswerTests(TestCase):
     def test_matches_no(self):

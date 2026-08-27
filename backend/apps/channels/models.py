@@ -52,6 +52,15 @@ class SmsContext(models.Model):
     )
     discreet = models.BooleanField(default=False)
     pending_safety_check = models.BooleanField(default=False)
+    pending_referral_step = models.CharField(
+        max_length=20,
+        choices=[
+            ("consent", "Awaiting consent"),
+            ("district", "Awaiting district"),
+        ],
+        blank=True,
+        default="",
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
