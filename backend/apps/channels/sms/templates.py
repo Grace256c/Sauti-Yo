@@ -470,3 +470,25 @@ def build_unmatched_reply(language="en"):
 def build_followup_expired_reply(language="en"):
     language = _sms_language(language)
     return FOLLOWUP_EXPIRED_REPLIES[language]
+
+
+REFERRAL_CONSENT_PROMPT = (
+    "An organisation may be able to help you directly. Reply YES to let "
+    "them contact you, or NO for just the number."
+)
+REFERRAL_DISTRICT_PROMPT = "Which district are you in?"
+
+
+def build_referral_consent_prompt():
+    return REFERRAL_CONSENT_PROMPT
+
+
+def build_referral_district_prompt():
+    return REFERRAL_DISTRICT_PROMPT
+
+
+def build_referral_confirmation_reply(referral):
+    return (
+        f"You're referred to {referral.organisation.support_service.name}. "
+        f"Reference {referral.reference}. They may call you on this number."
+    )

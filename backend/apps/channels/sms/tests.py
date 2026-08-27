@@ -11,6 +11,8 @@ from apps.channels.models import SmsContext
 from apps.channels.sms import ai_classifier, handler
 from apps.channels.sms.handler import handle_sms_request
 from apps.channels.sms.keywords import (
+    match_consent_no,
+    match_consent_yes,
     match_danger,
     match_discreet,
     match_followup,
@@ -28,6 +30,8 @@ from apps.rights.models import (
 )
 from apps.rights.services import get_situation_detail
 from apps.support.models import SupportService
+from apps.partners.models import PartnerOrganisation
+from apps.referrals.models import Referral
 from apps.channels.sms import templates
 
 
@@ -159,6 +163,29 @@ class MatchNotSafeAnswerTests(TestCase):
 
     def test_does_not_false_positive_on_info(self):
         self.assertFalse(match_not_safe_answer("send me more info please"))
+
+
+class MatchConsentTests(TestCase):
+    def test_match_consent_yes_matches_bare_yes(self):
+        self.assertTrue(match_consent_yes("yes"))
+
+    def test_match_consent_yes_matches_yes_in_sentence(self):
+        self.assertTrue(match_consent_yes("yes please connect me"))
+
+    def test_match_consent_yes_matches_short_form(self):
+        self.assertTrue(match_consent_yes("y"))
+
+    def test_match_consent_yes_false_for_no(self):
+        self.assertFalse(match_consent_yes("no"))
+
+    def test_match_consent_no_matches_bare_no(self):
+        self.assertTrue(match_consent_no("no"))
+
+    def test_match_consent_no_matches_short_form(self):
+        self.assertTrue(match_consent_no("n"))
+
+    def test_match_consent_no_false_for_yes(self):
+        self.assertFalse(match_consent_no("yes"))
 
 
 class KeywordMatchingTests(TestCase):
@@ -436,6 +463,44 @@ class FixedReplyTests(TestCase):
 
     def test_build_followup_expired_reply(self):
         self.assertIn("STEPS", templates.build_followup_expired_reply())
+
+
+class ReferralTemplateTests(TestCase):
+    def test_build_referral_consent_prompt(self):
+        self.assertEqual(
+            templates.build_referral_consent_prompt(),
+            templates.REFERRAL_CONSENT_PROMPT,
+        )
+
+    def test_build_referral_district_prompt(self):
+        self.assertEqual(
+            templates.build_referral_district_prompt(),
+            templates.REFERRAL_DISTRICT_PROMPT,
+        )
+
+    def test_build_referral_confirmation_reply(self):
+        service = SupportService.objects.create(
+            name="Referral Template Test Partner",
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            is_active=True,
+        )
+        referral = Referral.objects.create(
+            reference="SY-REF-TEMPLATE-TEST",
+            organisation=organisation,
+            citizen_consent_to_share=True,
+            status="new",
+        )
+
+        message = templates.build_referral_confirmation_reply(referral)
+
+        self.assertIn("Referral Template Test Partner", message)
+        self.assertIn("SY-REF-TEMPLATE-TEST", message)
 
 
 @override_settings(LLM_API_KEY="")

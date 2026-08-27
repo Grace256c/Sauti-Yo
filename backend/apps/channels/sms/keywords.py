@@ -79,6 +79,16 @@ def match_not_safe_answer(text):
     return any(phrase in normalized for phrase in NOT_SAFE_ANSWER_PHRASES)
 
 
+def match_consent_yes(text):
+    normalized = _normalize(text)
+    return normalized in {"yes", "y"} or bool(re.search(r"\byes\b", normalized))
+
+
+def match_consent_no(text):
+    normalized = _normalize(text)
+    return normalized in {"no", "n"} or bool(re.search(r"\bno\b", normalized))
+
+
 LANGUAGE_COMMANDS = {
     "en": {"en", "eng", "english"},
     "lg": {"lg", "lug", "luganda"},
