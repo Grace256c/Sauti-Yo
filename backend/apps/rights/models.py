@@ -191,6 +191,7 @@ class SafetyResponse(models.Model):
     def __str__(self):
         return f"{self.rights_topic} — {self.trigger_key}"
 
+
 class RightsTopicTranslation(models.Model):
     LANGUAGE_CHOICES = [
         ("en", "English"),
@@ -299,3 +300,142 @@ class SafetyResponseTranslation(models.Model):
 
     def __str__(self):
         return f"{self.safety_response_id} — {self.language}"
+
+
+class LegalProvision(models.Model):
+    """
+    Stores a specific legal authority supporting a RightsTopic.
+
+    Legal provisions keep the authoritative legal reference separate
+    from the citizen-facing plain-language explanation.
+    """
+
+    SOURCE_TYPE_CHOICES = [
+        ("constitution", "Constitution"),
+        ("act", "Act of Parliament"),
+        ("regulation", "Regulation"),
+        ("statutory_instrument", "Statutory Instrument"),
+        ("case_law", "Case Law"),
+        ("international", "International / Regional Instrument"),
+        ("other", "Other"),
+    ]
+
+    VERIFICATION_STATUS_CHOICES = [
+        ("verified", "Verified"),
+        ("review_required", "Review Required"),
+        ("expired", "Expired"),
+        ("archived", "Archived"),
+    ]
+
+    rights_topic = models.ForeignKey(
+        RightsTopic,
+        on_delete=models.CASCADE,
+        related_name="legal_provisions",
+    )
+
+    source_type = models.CharField(
+        max_length=30,
+        choices=SOURCE_TYPE_CHOICES,
+        default="act",
+    )
+
+    law_title = models.CharField(
+        max_length=255,
+    )
+
+    provision_reference = models.CharField(
+        max_length=150,
+        help_text=(
+            "Specific legal reference, for example "
+            "'Article 21', 'Section 7(1)' or 'Regulation 4'."
+        ),
+    )
+
+    provision_heading = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    provision_text = models.TextField(
+        blank=True,
+        help_text=(
+            "Reviewed extract or summary of the relevant legal provision. "
+            "Do not store unverified AI-generated legal text here."
+        ),
+    )
+
+    plain_language_explanation = models.TextField(
+        help_text=(
+            "Citizen-facing explanation of the provision in clear, "
+            "simple language."
+        ),
+    )
+
+    source_url = models.URLField(
+        blank=True,
+    )
+
+    jurisdiction = models.CharField(
+        max_length=100,
+        default="Uganda",
+    )
+
+    reviewed_by = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    last_reviewed = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    next_review_due = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    verification_status = models.CharField(
+        max_length=30,
+        choices=VERIFICATION_STATUS_CHOICES,
+        default="review_required",
+    )
+
+    order = models.PositiveIntegerField(
+        default=1,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "order",
+            "id",
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "rights_topic",
+                    "law_title",
+                    "provision_reference",
+                ],
+                name="unique_legal_provision_per_topic",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.law_title} — "
+            f"{self.provision_reference}"
+        )

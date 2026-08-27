@@ -6,6 +6,7 @@ from apps.support.serializers import (
 
 from .models import (
     ActionStep,
+    LegalProvision,
     RightsTopic,
     SafetyResponse,
     Situation,
@@ -121,6 +122,30 @@ class SafetyResponseSerializer(
         return obj.message
 
 
+class LegalProvisionSerializer(
+    serializers.ModelSerializer
+):
+    class Meta:
+        model = LegalProvision
+        fields = [
+            "id",
+            "source_type",
+            "law_title",
+            "provision_reference",
+            "provision_heading",
+            "provision_text",
+            "plain_language_explanation",
+            "source_url",
+            "jurisdiction",
+            "reviewed_by",
+            "last_reviewed",
+            "next_review_due",
+            "verification_status",
+            "order",
+            "is_active",
+        ]
+
+
 class RightsTopicSerializer(serializers.ModelSerializer):
     title = serializers.SerializerMethodField()
     summary = serializers.SerializerMethodField()
@@ -140,6 +165,12 @@ class RightsTopicSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+
+    legal_provisions = LegalProvisionSerializer(
+        many=True,
+        read_only=True,
+    )
+
     class Meta:
         model = RightsTopic
         fields = [
@@ -155,6 +186,7 @@ class RightsTopicSerializer(serializers.ModelSerializer):
             "next_review_due",
             "verification_status",
             "support_services",
+            "legal_provisions",
             "action_steps",
             "safety_responses",
             "is_active",
@@ -223,3 +255,13 @@ class SituationSerializer(serializers.ModelSerializer):
             "rights_links",
             "is_active",
         ]
+
+
+class ConcernAnalysisRequestSerializer(
+    serializers.Serializer
+):
+    concern = serializers.CharField(
+        allow_blank=False,
+        trim_whitespace=True,
+        max_length=2000,
+    )

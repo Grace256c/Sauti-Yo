@@ -1137,6 +1137,18 @@ export default function RightsResults() {
           response.is_active,
       ) ?? [];
 
+
+  const backendLegalProvisions =
+    backendTopic?.legal_provisions
+      ?.filter(
+        (provision) =>
+          provision.is_active,
+      )
+      .sort(
+        (a, b) =>
+          a.order - b.order,
+      ) ?? [];
+
   const Icon = rightsCategory.icon;
 
   const immediateSafetyConcern =
@@ -1353,6 +1365,102 @@ export default function RightsResults() {
           </div>
         </div>
       </section>
+
+      {/* LEGAL BASIS */}
+      {backendLegalProvisions.length > 0 && (
+        <section className="section-padding border-y border-border bg-surface-soft">
+          <div className="site-container">
+            <div className="grid gap-12 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20">
+              <div>
+                <BookOpen
+                  className="h-7 w-7 text-gold"
+                  strokeWidth={1.6}
+                />
+
+                <div className="mt-5 flex items-center gap-3">
+                  <span className="gold-rule" />
+
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-deep dark:text-gold">
+                    Legal basis
+                  </p>
+                </div>
+
+                <h2 className="heading-serif mt-5 text-3xl font-semibold leading-tight text-text-primary sm:text-4xl">
+                  Where this information
+                  <span className="block text-gold-deep dark:text-gold">
+                    comes from.
+                  </span>
+                </h2>
+
+                <p className="mt-5 max-w-md text-base leading-7 text-text-secondary">
+                  These references connect the guidance
+                  to Ugandan law. Content marked review
+                  required has not yet received final
+                  legal-review approval.
+                </p>
+              </div>
+
+              <div className="space-y-5">
+                {backendLegalProvisions.map(
+                  (provision) => (
+                    <article
+                      key={provision.id}
+                      className="border border-border bg-surface p-5 sm:p-6"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-gold-deep dark:text-gold">
+                          {provision.source_type.replace(
+                            "_",
+                            " ",
+                          )}
+                        </p>
+
+                        <span className="border border-border px-2 py-1 text-xs font-semibold text-text-secondary">
+                          {provision.verification_status ===
+                          "verified"
+                            ? "Verified"
+                            : "Review required"}
+                        </span>
+                      </div>
+
+                      <h3 className="mt-4 text-lg font-semibold text-text-primary">
+                        {provision.law_title}
+                      </h3>
+
+                      <p className="mt-1 font-semibold text-gold-deep dark:text-gold">
+                        {provision.provision_reference}
+                      </p>
+
+                      {provision.provision_heading && (
+                        <p className="mt-2 text-sm font-medium text-text-primary">
+                          {provision.provision_heading}
+                        </p>
+                      )}
+
+                      <p className="mt-4 text-sm leading-6 text-text-secondary">
+                        {
+                          provision.plain_language_explanation
+                        }
+                      </p>
+
+                      {provision.source_url && (
+                        <a
+                          href={provision.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-5 inline-flex text-sm font-semibold text-gold-deep underline underline-offset-4 dark:text-gold"
+                        >
+                          View legal source
+                        </a>
+                      )}
+                    </article>
+                  ),
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ACT */}
       <section className="section-padding bg-background">

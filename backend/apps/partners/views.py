@@ -1040,6 +1040,7 @@ class PublicPartnerMatchAPIView(APIView):
             PartnerOrganisation.objects
             .filter(
                 is_active=True,
+                is_test=False,
                 service_configuration__accepting_referrals=True,
                 verification_requests__status="verified",
             )

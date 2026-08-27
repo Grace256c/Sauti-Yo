@@ -417,6 +417,7 @@ class CitizenReferralCreateAPIView(APIView):
             .filter(
                 pk=organisation.pk,
                 is_active=True,
+                is_test=False,
             )
             .first()
         )
