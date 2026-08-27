@@ -489,3 +489,41 @@ class HandleVoiceRequestTests(TestCase):
         self.assertFalse(
             VoiceSession.objects.filter(session_id="sess-rl-5").exists()
         )
+
+
+class VoiceCallbackViewTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_call_start_returns_xml_response(self):
+        response = self.client.post(
+            "/api/channels/voice/",
+            {
+                "sessionId": "view-sess-1",
+                "phoneNumber": "+256700000000",
+                "isActive": "1",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/xml")
+        self.assertIn(b"<Response>", response.content)
+
+    def test_get_is_not_allowed(self):
+        response = self.client.get("/api/channels/voice/")
+        self.assertEqual(response.status_code, 405)
+
+    @patch("apps.channels.voice.views.handle_voice_request")
+    def test_unhandled_error_returns_graceful_xml(self, mock_handle):
+        mock_handle.side_effect = RuntimeError("boom")
+        response = self.client.post(
+            "/api/channels/voice/",
+            {
+                "sessionId": "view-sess-2",
+                "phoneNumber": "+256700000000",
+                "isActive": "1",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"<Say>", response.content)
+        self.assertNotIn(b"<Record", response.content)
+        self.assertNotIn(b"<GetDigits", response.content)
