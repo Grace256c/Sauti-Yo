@@ -189,6 +189,43 @@ class IvrXmlTests(TestCase):
         xml = ivr.build_closing_xml()
         self.assertIn("Thank you", xml)
 
+    def test_safety_reply_with_connect_offers_press_1(self):
+        xml = ivr.build_safety_reply_with_connect_xml(
+            "Your safety matters. Call Sauti 116."
+        )
+        self.assertIn("Your safety matters. Call Sauti 116.", xml)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("press 1", xml.lower())
+
+    def test_dial_xml_includes_dial_verb_with_no_recording(self):
+        xml = ivr.build_dial_xml("+256700000000")
+        self.assertIn('<Dial phoneNumbers="+256700000000"', xml)
+        self.assertIn('record="false"', xml)
+        self.assertNotIn("<GetDigits", xml)
+        self.assertNotIn("<Record ", xml)
+
+    def test_dial_xml_fallback_mentions_the_number(self):
+        xml = ivr.build_dial_xml("+256700000000")
+        # The fallback <Say> (only reached if the dial isn't answered)
+        # must repeat the number so a caller who couldn't be connected
+        # still has it, matching what they'd have heard without this
+        # feature.
+        say_count = xml.count("<Say>")
+        self.assertEqual(say_count, 1)
+        self.assertIn("+256700000000", xml)
+
+    def test_post_reply_menu_prompt_mentions_connect_option(self):
+        xml = ivr.build_reply_xml("some reply text")
+        self.assertIn("press 3", xml.lower())
+
+    def test_dial_xml_escapes_quote_in_phone_number(self):
+        xml = ivr.build_dial_xml('+1" onmouseover="evil')
+        # The payload should not break out of the attribute - verify the
+        # injection attempt is safely contained within quotes
+        self.assertNotIn('phoneNumbers="+1" onmouseover="evil"', xml)
+        # quoteattr chooses appropriate quotes to safely escape the value
+        self.assertIn("phoneNumbers='+1\" onmouseover=\"evil'", xml)
+
 
 @override_settings(LLM_API_KEY="", OPENAI_API_KEY="test-key")
 class HandleVoiceRequestTests(TestCase):

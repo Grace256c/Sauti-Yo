@@ -1,4 +1,4 @@
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, quoteattr
 
 # NOTE: Africa's Talking's exact Voice XML attribute names/defaults
 # (finishOnKey, maxLength, trimSilence, playBeep, timeout) should be
@@ -22,7 +22,17 @@ DISCREET_SAFETY_CHECKIN_PROMPT = (
 
 POST_REPLY_MENU_PROMPT = (
     "To hear support contacts, press 1. To hear that again, press 2. "
-    "To end this call, press 0."
+    "To be connected now, press 3. To end this call, press 0."
+)
+
+CRISIS_CONNECT_PROMPT = (
+    "Press 1 to connect to that support line now. Stay on the line to "
+    "end the call."
+)
+
+CONNECT_FAILED_TEXT_TEMPLATE = (
+    "That number isn't answering right now. You can reach them "
+    "directly at {phone_number}."
 )
 
 RETRY_PROMPT = (
@@ -55,6 +65,13 @@ def _get_digits(prompt, num_digits=1, timeout=10):
     )
 
 
+def _dial(phone_number):
+    return (
+        f"<Dial phoneNumbers={quoteattr(phone_number)} record=\"false\" "
+        'maxDuration="300"/>'
+    )
+
+
 def _response(*fragments):
     return (
         '<?xml version="1.0" encoding="UTF-8"?>'
@@ -77,6 +94,19 @@ def build_reply_xml(spoken_text):
     return _response(
         _say(spoken_text), _get_digits(POST_REPLY_MENU_PROMPT, num_digits=1)
     )
+
+
+def build_safety_reply_with_connect_xml(safety_text):
+    return _response(
+        _say(safety_text), _get_digits(CRISIS_CONNECT_PROMPT, num_digits=1)
+    )
+
+
+def build_dial_xml(phone_number):
+    fallback_text = CONNECT_FAILED_TEXT_TEMPLATE.format(
+        phone_number=phone_number
+    )
+    return _response(_dial(phone_number), _say(fallback_text))
 
 
 def build_unmatched_xml(retry):
