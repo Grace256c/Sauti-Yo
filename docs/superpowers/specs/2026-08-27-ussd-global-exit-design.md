@@ -41,6 +41,13 @@ New `DEFAULT_COPY` key, following the existing `get_copy` pattern (per-language 
 
 Matching how `"ussd.back"` / `"ussd.more"` / `"ussd.next"` are already stored as bare labels and assembled with their digit at each call site (`f"0. {get_copy('ussd.exit', language)}"`), rather than baking the digit into the copy string itself. `ussd.main_menu`, `ussd.topic_menu`, `ussd.safety_continue`, and `ussd.continue` are the exception — they're already stored as complete pre-formatted menu blocks, so those three get their `"0."` back-digit changed to `"9."` in place (`ussd.main_menu` needs no change, since it never had a "0. Back").
 
+## Data migration for existing translations
+
+`get_copy` prefers an active `ChannelContent` database row over `DEFAULT_COPY`. Migration `backend/apps/channels/migrations/0007_seed_multilingual_ussd_copy.py` already seeded `lg`/`sw`/`nyn` rows for `ussd.topic_menu`, `ussd.safety_continue`, and `ussd.continue` with "0." as the back digit, and there is no seeded row for `ussd.exit` in any language (English has no seeded rows at all — it runs entirely on `DEFAULT_COPY`). Changing `DEFAULT_COPY` alone therefore only fixes English; the other three languages need a new forward-only data migration (following the `0007` migration's own `RunPython` pattern) that:
+
+- Updates the existing `lg`/`sw`/`nyn` rows for `ussd.topic_menu`, `ussd.safety_continue`, and `ussd.continue` so their embedded back digit reads "9." instead of "0." (find by `content_key`/`language`/`channel`, set `text` to the corrected string — not `get_or_create`, since these rows already exist).
+- Creates new `ussd.exit` rows for `lg`/`sw`/`nyn`, reusing the bare exit labels already embedded in each language's `ussd.main_menu` string: `lg` → "Fuluma", `sw` → "Toka", `nyn` → "Rugamu".
+
 ## Non-goals
 
 - No change to the 3-strikes invalid-input flow (`MAX_INVALID_ATTEMPTS` in `handler.py`) — Exit is always a valid, recognized input, so it never contributes to that counter.
