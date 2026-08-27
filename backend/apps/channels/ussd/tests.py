@@ -776,6 +776,8 @@ class TopicDetailTests(TestCase):
         text, ended = menus.render_topic_detail(self._session(9999))
         self.assertIn("1. Action steps", text)
         self.assertIn("2. Support contacts", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
 
     def test_transition_selects_action_steps(self):
         next_state, context = menus.transition_topic_detail(
@@ -793,7 +795,13 @@ class TopicDetailTests(TestCase):
 
     def test_transition_back_with_no_situation_returns_situation_list(self):
         next_state, context = menus.transition_topic_detail(
-            self._session(9999), "0"
+            self._session(9999), "9"
+        )
+        self.assertEqual(next_state, "situation_list")
+
+    def test_transition_back_before_last_chunk_returns_situation_list(self):
+        next_state, context = menus.transition_topic_detail(
+            self._session(0), "9"
         )
         self.assertEqual(next_state, "situation_list")
 

@@ -471,7 +471,7 @@ def transition_topic_detail(session, user_input):
                 "topic_detail",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_from_topic(situation_slug, topic_slug)
         return None
 
@@ -494,7 +494,7 @@ def transition_topic_detail(session, user_input):
                 "chunk_index": 0,
             },
         )
-    if user_input == "0":
+    if user_input == "9":
         return _back_from_topic(situation_slug, topic_slug)
     return None
 
