@@ -1,58 +1,14 @@
 import {
   ArrowRight,
   BookOpen,
-  BriefcaseBusiness,
   Building2,
   CheckCircle2,
-  HeartHandshake,
-  Home,
-  Landmark,
   Scale,
-  ShieldCheck,
-  Users,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import legalBackground from "../../assets/images/legal-background.png";
-
-const categories = [
-  {
-    slug: "work-employment",
-    icon: BriefcaseBusiness,
-    title: "Work & Employment",
-    text: "Questions about pay, dismissal, workplace treatment, contracts or unfair conditions.",
-  },
-  {
-    slug: "safety-protection",
-    icon: ShieldCheck,
-    title: "Safety & Protection",
-    text: "Situations involving abuse, threats, violence, harassment or personal safety.",
-  },
-  {
-    slug: "land-housing",
-    icon: Home,
-    title: "Land & Housing",
-    text: "Issues involving land, tenancy, eviction, ownership or housing disputes.",
-  },
-  {
-    slug: "family-inheritance",
-    icon: HeartHandshake,
-    title: "Family & Inheritance",
-    text: "Questions affecting marriage, children, family responsibilities or inheritance.",
-  },
-  {
-    slug: "public-services",
-    icon: Landmark,
-    title: "Public Services",
-    text: "Concerns involving public institutions, access to services or administrative decisions.",
-  },
-  {
-    slug: "community-discrimination",
-    icon: Users,
-    title: "Community & Discrimination",
-    text: "Situations involving unfair treatment, exclusion or rights within the community.",
-  },
-];
+import { rightsCategories } from "../../data/rightsData";
 
 const nextSteps = [
   {
@@ -174,7 +130,7 @@ export default function Rights() {
 
           {/* RIGHTS CATEGORIES */}
           <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {categories.map((category) => {
+            {rightsCategories.map((category) => {
               const Icon = category.icon;
 
               return (
@@ -195,7 +151,7 @@ export default function Rights() {
                   </h3>
 
                   <p className="mt-3 text-sm leading-6 text-text-secondary">
-                    {category.text}
+                    {category.shortDescription}
                   </p>
 
                   <span className="mt-auto inline-flex items-center gap-2 pt-6 text-sm font-semibold text-gold-deep transition-all duration-300 group-hover:gap-3 dark:text-gold">

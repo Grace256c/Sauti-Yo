@@ -156,17 +156,56 @@ class LanguageSelectTests(TestCase):
         self.assertIn("1. English", text)
         self.assertFalse(ended)
 
-    def test_transition_sets_language_and_moves_to_main_menu(self):
+    def test_render_shows_unavailable_notice_when_flagged(self):
+        session = UssdSession(
+            state="language_select",
+            language="",
+            context={"unavailable_notice": True},
+        )
+        text, ended = menus.render_language_select(session)
+        self.assertIn("not available yet", text)
+        self.assertIn("1. English", text)
+        self.assertFalse(ended)
+
+    def test_transition_english_sets_language_and_moves_to_main_menu(self):
         session = UssdSession(state="language_select", language="", context={})
-        next_state, context = menus.transition_language_select(session, "2")
+        next_state, context = menus.transition_language_select(session, "1")
         self.assertEqual(next_state, "main_menu")
-        self.assertEqual(session.language, "lg")
+        self.assertEqual(session.language, "en")
         self.assertEqual(context, {})
+
+    def test_transition_unavailable_language_stays_on_picker_with_notice(self):
+        for digit, expected_language in (("2", "lg"), ("3", "sw"), ("4", "nyn")):
+            session = UssdSession(state="language_select", language="", context={})
+            next_state, context = menus.transition_language_select(session, digit)
+            self.assertEqual(next_state, "language_select")
+            self.assertIs(context["unavailable_notice"], True)
+            self.assertEqual(context["requested_language"], expected_language)
+            self.assertEqual(session.language, "")
 
     def test_transition_rejects_invalid_choice(self):
         session = UssdSession(state="language_select", language="", context={})
         result = menus.transition_language_select(session, "9")
         self.assertIsNone(result)
+
+    def test_render_unavailable_notice_uses_requested_language_for_lookup(self):
+        from apps.content.models import ChannelContent
+
+        ChannelContent.objects.create(
+            content_key="ussd.language_unavailable",
+            language="lg",
+            channel="ussd",
+            text="Olulimi olwo terukyaali kati.",
+            is_active=True,
+        )
+        session = UssdSession(
+            state="language_select",
+            language="",
+            context={"unavailable_notice": True, "requested_language": "lg"},
+        )
+        text, ended = menus.render_language_select(session)
+        self.assertIn("Olulimi olwo terukyaali kati.", text)
+        self.assertFalse(ended)
 
 
 class MainMenuTests(TestCase):
@@ -628,6 +667,7 @@ class SafetyGateTests(TestCase):
             title="High Risk Topic",
             summary="Summary",
             risk_level="high_risk",
+            verification_status="verified",
         )
         self.safety = SafetyResponse.objects.create(
             rights_topic=self.topic,
@@ -963,6 +1003,43 @@ class HandleUssdRequestTests(TestCase):
         self.assertEqual(session.context.get("attempts"), 1)
         self.assertTrue(session.is_active)
 
+    def test_unavailable_language_pick_stays_on_picker_end_to_end(self):
+        response = handle_ussd_request("sess-lang-unavail", "+256700000000", "")
+        self.assertTrue(response.startswith("CON "))
+        response = handle_ussd_request("sess-lang-unavail", "+256700000000", "2")
+        self.assertIn("not available yet", response)
+        self.assertIn("1. English", response)
+
+        session = UssdSession.objects.get(session_id="sess-lang-unavail")
+        self.assertEqual(session.state, "language_select")
+        self.assertEqual(session.language, "")
+
+    def test_two_unavailable_language_picks_in_a_row_end_to_end(self):
+        handle_ussd_request("sess-lang-double", "+256700000000", "")
+        handle_ussd_request("sess-lang-double", "+256700000000", "2")
+        response = handle_ussd_request("sess-lang-double", "+256700000000", "2*3")
+        self.assertIn("not available yet", response)
+
+        session = UssdSession.objects.get(session_id="sess-lang-double")
+        self.assertEqual(session.state, "language_select")
+        self.assertEqual(session.language, "")
+        self.assertEqual(session.context.get("requested_language"), "sw")
+
+        response = handle_ussd_request("sess-lang-double", "+256700000000", "2*3*1")
+        self.assertIn("1. Find my rights", response)
+        session.refresh_from_db()
+        self.assertEqual(session.state, "main_menu")
+        self.assertEqual(session.language, "en")
+
+    def test_replayed_unavailable_language_pick_returns_cached_response(self):
+        handle_ussd_request("sess-lang-replay", "+256700000000", "")
+        first_response = handle_ussd_request("sess-lang-replay", "+256700000000", "3")
+        replayed_response = handle_ussd_request("sess-lang-replay", "+256700000000", "3")
+        self.assertEqual(first_response, replayed_response)
+
+        session = UssdSession.objects.get(session_id="sess-lang-replay")
+        self.assertEqual(session.state, "language_select")
+
 
 from django.urls import reverse
 
@@ -984,3 +1061,221 @@ class UssdCallbackViewTests(TestCase):
     def test_get_not_allowed(self):
         response = self.client.get(reverse("ussd-callback"))
         self.assertEqual(response.status_code, 405)
+
+
+class UnreviewedNoticeTests(TestCase):
+    def test_prepend_notice_leaves_verified_text_unchanged(self):
+        text = menus._prepend_unreviewed_notice("Some text.", "verified", "en")
+        self.assertEqual(text, "Some text.")
+
+    def test_prepend_notice_adds_notice_for_review_required(self):
+        text = menus._prepend_unreviewed_notice(
+            "Some text.", "review_required", "en"
+        )
+        self.assertTrue(text.startswith("Note: not yet reviewed. "))
+        self.assertIn("Some text.", text)
+
+    def test_prepend_notice_adds_notice_for_expired_and_archived(self):
+        for status in ("expired", "archived"):
+            text = menus._prepend_unreviewed_notice("Some text.", status, "en")
+            self.assertTrue(text.startswith("Note: not yet reviewed. "))
+
+    def test_prepend_notice_on_empty_text_returns_just_the_notice(self):
+        text = menus._prepend_unreviewed_notice("", "review_required", "en")
+        self.assertEqual(text, "Note: not yet reviewed.")
+
+    def test_render_topic_detail_shows_notice_for_review_required_topic(self):
+        RightsTopic.objects.create(
+            slug="unreviewed-topic",
+            title="Unreviewed Topic",
+            summary="Short summary.",
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "unreviewed-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_topic_detail(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Short summary.", text)
+        self.assertFalse(ended)
+
+    def test_render_topic_detail_shows_no_notice_for_verified_topic(self):
+        RightsTopic.objects.create(
+            slug="verified-topic",
+            title="Verified Topic",
+            summary="Short summary.",
+            verification_status="verified",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "verified-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_topic_detail(session)
+        self.assertNotIn("Note: not yet reviewed.", text)
+        self.assertIn("Short summary.", text)
+
+    def test_transition_topic_detail_still_advances_chunks_for_review_required_topic(self):
+        RightsTopic.objects.create(
+            slug="long-unreviewed-topic",
+            title="Long Unreviewed Topic",
+            summary="Long summary sentence here. " * 20,
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "long-unreviewed-topic",
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_topic_detail(session, "1")
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 1)
+
+    def test_render_safety_gate_shows_notice_for_review_required_topic(self):
+        RightsTopic.objects.create(
+            slug="unreviewed-safety-topic",
+            title="Unreviewed Safety Topic",
+            summary="Fallback summary.",
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "unreviewed-safety-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_safety_gate(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertFalse(ended)
+
+    def test_render_safety_gate_long_message_shares_first_chunk_with_notice(self):
+        topic = RightsTopic.objects.create(
+            slug="long-unreviewed-safety-topic",
+            title="Long Unreviewed Safety Topic",
+            summary="Fallback summary.",
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        SafetyResponse.objects.create(
+            rights_topic=topic,
+            trigger_key="default",
+            message="Call the emergency line immediately. " * 10,
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "long-unreviewed-safety-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_safety_gate(session)
+        # The notice and the safety message are now joined with a single
+        # space rather than a blank-line paragraph break, so they flow
+        # through word-wrapping as one continuous text stream. Even for
+        # this very long (380-char) message, the notice and the start of
+        # the real message share the first chunk.
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Call the emergency line", text)
+        self.assertLessEqual(len(text), 182)
+        self.assertFalse(ended)
+
+        # The message is long enough that it still spans multiple chunks.
+        session.context["chunk_index"] = 1
+        text_chunk_1, _ = menus.render_safety_gate(session)
+        self.assertIn("Call the emergency line", text_chunk_1)
+        self.assertNotIn("Note: not yet reviewed.", text_chunk_1)
+
+    def test_transition_safety_gate_stays_in_sync_with_render_for_review_required_topic(self):
+        topic = RightsTopic.objects.create(
+            slug="sync-check-topic",
+            title="Sync Check Topic",
+            summary="Fallback summary.",
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        SafetyResponse.objects.create(
+            rights_topic=topic,
+            trigger_key="default",
+            message="Call the emergency line immediately. " * 10,
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "sync-check-topic",
+                "chunk_index": 0,
+            },
+        )
+        next_state, context = menus.transition_safety_gate(session, "1")
+        self.assertEqual(next_state, "safety_gate")
+        self.assertEqual(context["chunk_index"], 1)
+
+    def test_render_topic_detail_shares_first_chunk_with_realistic_length_summary(self):
+        RightsTopic.objects.create(
+            slug="realistic-length-topic",
+            title="Realistic Length Topic",
+            summary=(
+                "Sauti Yo can help you understand the issue, review "
+                "relevant rights information, and identify possible "
+                "next steps."
+            ),
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="topic_detail",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "realistic-length-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_topic_detail(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Sauti Yo can help you understand the issue", text)
+
+    def test_render_safety_gate_shows_notice_and_fallback_summary_together_when_no_safety_response(self):
+        RightsTopic.objects.create(
+            slug="no-response-realistic-topic",
+            title="No Response Realistic Topic",
+            summary=(
+                "Sauti Yo can help you understand the issue, review "
+                "relevant rights information, and identify possible "
+                "next steps."
+            ),
+            risk_level="high_risk",
+            verification_status="review_required",
+        )
+        session = UssdSession(
+            state="safety_gate",
+            language="en",
+            context={
+                "situation_slug": "s",
+                "topic_slug": "no-response-realistic-topic",
+                "chunk_index": 0,
+            },
+        )
+        text, ended = menus.render_safety_gate(session)
+        self.assertIn("Note: not yet reviewed.", text)
+        self.assertIn("Sauti Yo can help you understand the issue", text)

@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -38,6 +39,19 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Africa's Talking
+AFRICASTALKING_USERNAME = os.getenv("AFRICASTALKING_USERNAME") or "sandbox"
+AFRICASTALKING_API_KEY = os.getenv("AFRICASTALKING_API_KEY", "")
+AFRICASTALKING_SMS_SENDER_ID = os.getenv("AFRICASTALKING_SMS_SENDER_ID", "")
+
+# LLM
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL") or "claude-haiku-4-5"
+
+# Speech-to-text (transcription only - Claude remains the only model used
+# for classification/rewording, see apps.channels.sms.ai_classifier)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -49,19 +63,23 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
 
-    # Third-party
+    # Third party
     "rest_framework",
     "corsheaders",
 
-    # Sauti Yo
+    # Local apps
     "apps.core",
+    "apps.content",
     "apps.rights",
     "apps.support",
     "apps.channels",
-    "apps.feedback",
-    "apps.content",
-    "apps.campaigns",
     "apps.analytics",
+    "apps.campaigns",
+    "apps.feedback",
+    "apps.partners",
+    "apps.referrals",
+    "apps.chat",
+    "apps.legal_knowledge",
 ]
 
 MIDDLEWARE = [
@@ -77,6 +95,15 @@ MIDDLEWARE = [
 ]
 CORS_ALLOWED_ORIGINS = [
     os.getenv("FRONTEND_URL", "http://localhost:5173"),
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
+    os.getenv(
+        "FRONTEND_URL",
+        "http://localhost:5173",
+    ),
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -180,3 +207,21 @@ LANGUAGES = [
 LOCALE_PATHS = [
     BASE_DIR / "locale",
 ]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
+}
+
+# User-uploaded files
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

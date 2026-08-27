@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    ConcernAnalysisAPIView,
     RightsTopicDetailAPIView,
     RightsTopicListAPIView,
     SituationDetailAPIView,
@@ -8,6 +9,11 @@ from .views import (
 )
 
 urlpatterns = [
+    path(
+        "analyse/",
+        ConcernAnalysisAPIView.as_view(),
+        name="concern-analysis",
+    ),
     path(
         "situations/",
         SituationListAPIView.as_view(),

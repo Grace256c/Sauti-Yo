@@ -9,6 +9,9 @@ DEFAULT_COPY = {
     "ussd.language_prompt": (
         "1. English\n2. Luganda\n3. Kiswahili\n4. Runyankole"
     ),
+    "ussd.language_unavailable": (
+        "That language is not available yet. Please choose English for now."
+    ),
     "ussd.main_menu": "1. Find my rights\n2. Get help now\n0. Exit",
     "ussd.invalid_choice": "Invalid choice.",
     "ussd.too_many_invalid": (
@@ -34,6 +37,7 @@ DEFAULT_COPY = {
     "ussd.more": "More",
     "ussd.back": "Back",
     "ussd.next": "Next",
+    "ussd.unreviewed_notice": "Note: not yet reviewed.",
 }
 
 
@@ -116,6 +120,10 @@ def paginate_items(items, page, page_size=PAGE_SIZE):
 def render_language_select(session):
     body = get_copy("ussd.welcome", session.language)
     prompt = get_copy("ussd.language_prompt", session.language)
+    if session.context.get("unavailable_notice"):
+        requested = session.context.get("requested_language", session.language)
+        notice = get_copy("ussd.language_unavailable", requested)
+        return f"{notice}\n\n{body}\n{prompt}", False
     return f"{body}\n{prompt}", False
 
 
@@ -124,6 +132,11 @@ def transition_language_select(session, user_input):
     language = mapping.get(user_input)
     if language is None:
         return None
+    if language != "en":
+        return "language_select", {
+            "unavailable_notice": True,
+            "requested_language": language,
+        }
     session.language = language
     return "main_menu", {}
 
@@ -403,6 +416,13 @@ def _back_from_topic(situation_slug, topic_slug):
     )
 
 
+def _prepend_unreviewed_notice(text, verification_status, language):
+    if verification_status == "verified":
+        return text
+    notice = get_copy("ussd.unreviewed_notice", language)
+    return f"{notice} {text}" if text else notice
+
+
 def render_topic_detail(session):
     topic = RightsTopic.objects.filter(
         slug=session.context.get("topic_slug"), is_active=True
@@ -413,6 +433,7 @@ def render_topic_detail(session):
     chunk_index = session.context.get("chunk_index", 0)
     menu = get_copy("ussd.topic_menu", session.language)
     text = topic.summary or topic.title
+    text = _prepend_unreviewed_notice(text, topic.verification_status, session.language)
     screen, _ = _chunked_screen(text, chunk_index, menu, session.language)
     return screen, False
 
@@ -426,6 +447,7 @@ def transition_topic_detail(session, user_input):
 
     chunk_index = session.context.get("chunk_index", 0)
     text = topic.summary or topic.title
+    text = _prepend_unreviewed_notice(text, topic.verification_status, session.language)
     menu = get_copy("ussd.topic_menu", session.language)
     _, is_last = _chunked_screen(text, chunk_index, menu, session.language)
 
@@ -474,6 +496,7 @@ def render_safety_gate(session):
         trigger_key="default", is_active=True
     ).first()
     message = safety.message if safety else topic.summary or topic.title
+    message = _prepend_unreviewed_notice(message, topic.verification_status, session.language)
     chunk_index = session.context.get("chunk_index", 0)
     options = get_copy("ussd.safety_continue", session.language)
     screen, _ = _chunked_screen(message, chunk_index, options, session.language)
@@ -491,6 +514,7 @@ def transition_safety_gate(session, user_input):
         trigger_key="default", is_active=True
     ).first()
     message = safety.message if safety else topic.summary or topic.title
+    message = _prepend_unreviewed_notice(message, topic.verification_status, session.language)
     chunk_index = session.context.get("chunk_index", 0)
     options = get_copy("ussd.safety_continue", session.language)
     _, is_last = _chunked_screen(message, chunk_index, options, session.language)
