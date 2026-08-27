@@ -165,7 +165,7 @@ def seed_copy(apps, schema_editor):
 
     for language, entries in COPY.items():
         for content_key, text in entries.items():
-            ChannelContent.objects.update_or_create(
+            ChannelContent.objects.get_or_create(
                 content_key=content_key,
                 language=language,
                 channel="ussd",
@@ -185,15 +185,18 @@ def remove_copy(apps, schema_editor):
         "ChannelContent",
     )
 
-    ChannelContent.objects.filter(
-        language__in=["lg", "sw", "nyn"],
-        channel="ussd",
-        content_key__in={
-            key
-            for entries in COPY.values()
-            for key in entries
-        },
-    ).delete()
+    for language, entries in COPY.items():
+        for content_key, text in entries.items():
+            ChannelContent.objects.filter(
+                content_key=content_key,
+                language=language,
+                channel="ussd",
+                text=text,
+                is_verified=False,
+                reviewed_by="",
+                last_reviewed=None,
+                is_active=True,
+            ).delete()
 
 
 class Migration(migrations.Migration):
@@ -206,6 +209,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             seed_copy,
-            remove_copy,
+            migrations.RunPython.noop,
         ),
     ]

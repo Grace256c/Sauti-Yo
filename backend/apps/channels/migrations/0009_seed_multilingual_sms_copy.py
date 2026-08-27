@@ -69,7 +69,7 @@ def seed_copy(apps, schema_editor):
 
     for language, entries in COPY.items():
         for content_key, text in entries.items():
-            ChannelContent.objects.update_or_create(
+            ChannelContent.objects.get_or_create(
                 content_key=content_key,
                 language=language,
                 channel="sms",
@@ -110,6 +110,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             seed_copy,
-            remove_copy,
+            migrations.RunPython.noop,
         ),
     ]
