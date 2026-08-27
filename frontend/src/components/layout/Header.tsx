@@ -25,17 +25,17 @@ const languages = [
 ];
 
 const navigation = [
-  { to: "/", label: "Home" },
-  { to: "/about", label: "About" },
-  { to: "/rights", label: "Know Your Rights" },
-  { to: "/how-it-works", label: "How It Works" },
-  { to: "/access", label: "Access" },
-  { to: "/community", label: "Community Voice" },
-  { to: "/support", label: "Find Support" },
+  { to: "/", labelKey: "nav.home" },
+  { to: "/about", labelKey: "nav.about" },
+  { to: "/rights", labelKey: "nav.rights" },
+  { to: "/how-it-works", labelKey: "nav.howItWorks" },
+  { to: "/access", labelKey: "nav.access" },
+  { to: "/community", labelKey: "nav.community" },
+  { to: "/support", labelKey: "nav.support" },
 ];
 
 export default function Header() {
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const location = useLocation();
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -59,6 +59,15 @@ export default function Header() {
       useDark,
     );
   }, []);
+
+  useEffect(() => {
+    const savedLanguage =
+      localStorage.getItem("sauti-yo-language");
+
+    if (savedLanguage) {
+      i18n.changeLanguage(savedLanguage);
+    }
+  }, [i18n]);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -87,6 +96,12 @@ export default function Header() {
 
   const changeLanguage = (language: string) => {
     i18n.changeLanguage(language);
+
+    localStorage.setItem(
+      "sauti-yo-language",
+      language,
+    );
+
     setMobileOpen(false);
   };
 
@@ -96,7 +111,7 @@ export default function Header() {
         {/* Logo */}
         <Link
           to="/"
-          aria-label="Sauti Yo home"
+          aria-label={t("nav.home")}
           className="flex min-w-0 shrink-0 items-center"
         >
           <div className="flex h-[54px] w-[150px] items-center overflow-hidden sm:w-[165px] xl:w-[178px]">
@@ -110,7 +125,7 @@ export default function Header() {
 
         {/* Desktop navigation */}
         <nav
-          aria-label="Main navigation"
+          aria-label={t("common.mainNavigation")}
           className="hidden flex-1 items-center justify-center gap-4 lg:flex xl:gap-6"
         >
           {navigation.map((item) => (
@@ -133,7 +148,7 @@ export default function Header() {
                       isActive ? "-translate-y-0.5" : ""
                     }`}
                   >
-                    {item.label}
+                    {t(item.labelKey)}
                   </span>
 
                   <span
@@ -159,7 +174,7 @@ export default function Header() {
               onChange={(event) =>
                 changeLanguage(event.target.value)
               }
-              aria-label="Select language"
+              aria-label={t("common.selectLanguage")}
               className="h-11 min-w-[132px] appearance-none rounded-md border border-border bg-surface py-2 pl-9 pr-9 text-sm font-medium text-text-primary outline-none transition-all duration-200 hover:border-gold focus:border-gold focus:ring-2 focus:ring-gold/25"
             >
               {languages.map((language) => (
@@ -181,13 +196,13 @@ export default function Header() {
             onClick={toggleTheme}
             aria-label={
               darkMode
-                ? "Switch to light mode"
-                : "Switch to dark mode"
+                ? t("common.switchToLightMode")
+                : t("common.switchToDarkMode")
             }
             title={
               darkMode
-                ? "Switch to light mode"
-                : "Switch to dark mode"
+                ? t("common.switchToLightMode")
+                : t("common.switchToDarkMode")
             }
             className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface text-text-primary transition-all duration-200 hover:border-gold hover:bg-gold/10 hover:text-gold focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/25"
           >
@@ -202,7 +217,7 @@ export default function Header() {
             to="/rights"
             className="btn-primary ml-1 whitespace-nowrap"
           >
-            Start Here
+            {t("nav.startHere")}
           </NavLink>
         </div>
 
@@ -213,8 +228,8 @@ export default function Header() {
             onClick={toggleTheme}
             aria-label={
               darkMode
-                ? "Switch to light mode"
-                : "Switch to dark mode"
+                ? t("common.switchToLightMode")
+                : t("common.switchToDarkMode")
             }
             className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface text-text-primary transition-all duration-200 hover:border-gold hover:bg-gold/10 hover:text-gold focus:outline-none focus:ring-2 focus:ring-gold/25"
           >
@@ -233,8 +248,8 @@ export default function Header() {
             aria-expanded={mobileOpen}
             aria-label={
               mobileOpen
-                ? "Close navigation menu"
-                : "Open navigation menu"
+                ? t("common.closeMenu")
+                : t("common.openMenu")
             }
             className="flex h-11 w-11 items-center justify-center rounded-md border border-border bg-surface text-text-primary transition-all duration-200 hover:border-gold hover:bg-gold/10 hover:text-gold focus:outline-none focus:ring-2 focus:ring-gold/25"
           >
@@ -271,7 +286,7 @@ export default function Header() {
                         <span className="absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 bg-gold" />
                       )}
 
-                      {item.label}
+                      {t(item.labelKey)}
                     </>
                   )}
                 </NavLink>
@@ -281,7 +296,7 @@ export default function Header() {
             <div className="mt-5">
               <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary">
                 <Globe2 className="h-4 w-4" />
-                Language
+                {t("common.language")}
               </p>
 
               <div className="grid grid-cols-2 gap-2">
@@ -313,7 +328,7 @@ export default function Header() {
               to="/rights"
               className="btn-primary mt-5 w-full"
             >
-              Start Here
+              {t("nav.startHere")}
             </NavLink>
           </div>
         </div>

@@ -34,6 +34,7 @@ def get_situation_detail(slug):
             "rights_links__rights_topic__action_steps",
             "rights_links__rights_topic__safety_responses",
             "rights_links__rights_topic__support_services",
+            "rights_links__rights_topic__legal_provisions",
         ).get(slug=slug, is_active=True)
     except Situation.DoesNotExist:
         return None
@@ -65,6 +66,25 @@ def get_situation_detail(slug):
                     "is_emergency_service": s.is_emergency_service,
                 }
                 for s in topic.support_services.filter(is_active=True)
+            ],
+            "legal_provisions": [
+                {
+                    "source_type": provision.source_type,
+                    "law_title": provision.law_title,
+                    "provision_reference":
+                        provision.provision_reference,
+                    "provision_heading":
+                        provision.provision_heading,
+                    "plain_language_explanation":
+                        provision.plain_language_explanation,
+                    "source_url": provision.source_url,
+                    "jurisdiction": provision.jurisdiction,
+                    "verification_status":
+                        provision.verification_status,
+                }
+                for provision in topic.legal_provisions.filter(
+                    is_active=True
+                ).order_by("order", "id")
             ],
         })
 
@@ -127,3 +147,134 @@ def get_safety_message(situation_slug, trigger_key="immediate_danger"):
                 if response["trigger_key"] == "default":
                     return response["message"]
     return None
+
+
+
+def _normalise_concern_text(text):
+    return " ".join(
+        (text or "")
+        .lower()
+        .strip()
+        .split()
+    )
+
+
+def analyse_concern(concern):
+    """
+    Match a citizen's free-text concern to one active Sauti Yo
+    situation and return database-grounded rights information.
+
+    This matcher is deliberately deterministic. It may choose which
+    stored record is relevant, but it never generates legal facts.
+    """
+    text = _normalise_concern_text(concern)
+
+    if not text:
+        return None
+
+    situation_keywords = {
+        "domestic-violence": {
+            "domestic violence": 10,
+            "partner beats": 10,
+            "husband beats": 10,
+            "wife beats": 10,
+            "abusive partner": 9,
+            "abuse at home": 9,
+            "violence at home": 9,
+            "beaten at home": 9,
+            "threatened at home": 8,
+            "protection order": 8,
+            "abuser": 7,
+            "domestic abuse": 10,
+        },
+        "facing-eviction": {
+            "eviction": 10,
+            "evicted": 10,
+            "landlord": 7,
+            "tenant": 6,
+            "rent": 4,
+            "notice to leave": 9,
+            "kicked out": 8,
+            "forced to leave": 8,
+            "house": 2,
+            "tenancy": 7,
+        },
+        "sexual-harassment": {
+            "sexual harassment": 12,
+            "sexually harassed": 12,
+            "sexual advances": 11,
+            "unwanted touching": 10,
+            "sexual comments": 10,
+            "sexual messages": 10,
+            "asked for sex": 10,
+            "sexual favour": 10,
+            "sexual favors": 10,
+            "harassed sexually": 12,
+        },
+        "problem-at-work": {
+            "work": 3,
+            "workplace": 4,
+            "employer": 6,
+            "boss": 5,
+            "job": 4,
+            "salary": 7,
+            "wages": 7,
+            "unpaid": 8,
+            "dismissed": 8,
+            "dismissal": 8,
+            "fired": 9,
+            "terminated": 8,
+            "pregnant": 8,
+            "pregnancy": 8,
+            "discrimination": 7,
+            "harassment": 4,
+            "disciplinary": 6,
+            "leave": 4,
+            "trade union": 5,
+        },
+    }
+
+    scored = []
+
+    for slug, keywords in situation_keywords.items():
+        score = sum(
+            weight
+            for phrase, weight in keywords.items()
+            if phrase in text
+        )
+
+        if score > 0:
+            scored.append(
+                (
+                    score,
+                    slug,
+                )
+            )
+
+    if not scored:
+        return None
+
+    scored.sort(
+        key=lambda item: (
+            -item[0],
+            item[1],
+        )
+    )
+
+    best_score, best_slug = scored[0]
+
+    # Require more than a very weak generic match.
+    if best_score < 4:
+        return None
+
+    detail = get_situation_detail(best_slug)
+
+    if not detail:
+        return None
+
+    return {
+        "concern": concern.strip(),
+        "match_method": "deterministic",
+        "match_score": best_score,
+        "situation": detail,
+    }

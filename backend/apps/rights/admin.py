@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     ActionStep,
+    LegalProvision,
     RightsTopic,
     SafetyResponse,
     Situation,
@@ -16,6 +17,11 @@ class ActionStepInline(admin.TabularInline):
 
 class SafetyResponseInline(admin.TabularInline):
     model = SafetyResponse
+    extra = 0
+
+
+class LegalProvisionInline(admin.TabularInline):
+    model = LegalProvision
     extra = 0
 
 
@@ -77,6 +83,7 @@ class RightsTopicAdmin(admin.ModelAdmin):
     inlines = [
         ActionStepInline,
         SafetyResponseInline,
+        LegalProvisionInline,
     ]
 
 
@@ -132,5 +139,31 @@ class SafetyResponseAdmin(admin.ModelAdmin):
     search_fields = (
         "trigger_key",
         "message",
+        "rights_topic__title",
+    )
+
+
+@admin.register(LegalProvision)
+class LegalProvisionAdmin(admin.ModelAdmin):
+    list_display = (
+        "law_title",
+        "provision_reference",
+        "rights_topic",
+        "source_type",
+        "verification_status",
+        "is_active",
+    )
+
+    list_filter = (
+        "source_type",
+        "verification_status",
+        "is_active",
+    )
+
+    search_fields = (
+        "law_title",
+        "provision_reference",
+        "provision_heading",
+        "plain_language_explanation",
         "rights_topic__title",
     )

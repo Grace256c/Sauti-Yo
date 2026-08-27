@@ -8,6 +8,7 @@ from .models import (
     PartnerMember,
     PartnerOrganisation,
     PartnerServiceConfiguration,
+    PartnerVerificationRequest,
 )
 
 
@@ -199,4 +200,97 @@ class PartnerAPITests(TestCase):
         self.assertEqual(
             response.data["submitted_by"],
             self.user_one.id,
+        )
+
+
+class PublicPartnerMatchTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    def create_eligible_partner(
+        self,
+        *,
+        name,
+        is_test=False,
+    ):
+        service = SupportService.objects.create(
+            name=name,
+            service_type="Legal Aid",
+            verification_status="verified",
+            is_active=True,
+        )
+
+        organisation = PartnerOrganisation.objects.create(
+            support_service=service,
+            organisation_type="legal_aid",
+            headquarters_district="Kampala",
+            is_active=True,
+            is_test=is_test,
+        )
+
+        PartnerServiceConfiguration.objects.create(
+            organisation=organisation,
+            rights_categories=["work-employment"],
+            support_types=["legal-aid"],
+            languages=["English"],
+            support_channels=["phone"],
+            districts_served=["Kampala"],
+            accepting_referrals=True,
+        )
+
+        PartnerVerificationRequest.objects.create(
+            organisation=organisation,
+            status="verified",
+        )
+
+        return organisation
+
+    def get_matches(self):
+        return self.client.get(
+            "/api/partners/matches/",
+            {
+                "category": "work-employment",
+                "district": "Kampala",
+                "language": "English",
+                "channel": "phone",
+            },
+        )
+
+    def test_real_verified_partner_is_publicly_matchable(self):
+        organisation = self.create_eligible_partner(
+            name="Real Legal Aid Partner",
+        )
+
+        response = self.get_matches()
+
+        self.assertEqual(response.status_code, 200)
+
+        ids = [
+            item["id"]
+            for item in response.data
+        ]
+
+        self.assertIn(
+            organisation.id,
+            ids,
+        )
+
+    def test_test_partner_is_excluded_from_public_matching(self):
+        organisation = self.create_eligible_partner(
+            name="Development Test Partner",
+            is_test=True,
+        )
+
+        response = self.get_matches()
+
+        self.assertEqual(response.status_code, 200)
+
+        ids = [
+            item["id"]
+            for item in response.data
+        ]
+
+        self.assertNotIn(
+            organisation.id,
+            ids,
         )

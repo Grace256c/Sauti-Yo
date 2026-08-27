@@ -69,6 +69,10 @@ class PartnerOrganisation(models.Model):
         default=True,
     )
 
+    is_test = models.BooleanField(
+        default=False,
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )

@@ -409,7 +409,7 @@ class Command(BaseCommand):
                 ),
                 "risk_level": "sensitive",
                 "source_name": (
-                    "Employment Act, 2006, s.7(1). Also see Employment "
+                    "Employment Act, 2006, section 6. Also see Employment "
                     "(Sexual Harassment) Regulations, 2012 (S.I. 15 of "
                     "2012), https://ulii.org/en/akn/ug/act/si/2012/15/"
                     "eng@2012-04-20/source (regulations URL not "

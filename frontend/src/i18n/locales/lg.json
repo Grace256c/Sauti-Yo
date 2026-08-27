@@ -1,1 +1,30 @@
-{}
+{
+    
+  "brand": {
+    "name": "Sauti Yo",
+    "tagline": "Manya. Kolawo. Wulirwa."
+  },
+  "nav": {
+    "home": "Awaka",
+    "about": "Ebikwata ku Ffe",
+    "rights": "Manya Eddembe Lyo",
+    "howItWorks": "Engeri Gy'ekolamu",
+    "access": "Okufuna Obuweereza",
+    "community": "Eddoboozi ly'Abantu",
+    "support": "Funa Obuyambi",
+    "partner": "Omukutu gw'Abakolagana Naffe",
+    "startHere": "Tandikira Wano"
+  },
+  "common": {
+    "language": "Olulimi",
+    "back": "Ddayo",
+    "continue": "Weyongereyo",
+    "learnMore": "Manya ebisingawo",
+    "selectLanguage": "Londa olulimi",
+    "mainNavigation": "Ennambika enkulu",
+    "switchToLightMode": "Kyusa okudda ku langi entangaavu",
+    "switchToDarkMode": "Kyusa okudda ku langi enzirugavu",
+    "openMenu": "Ggulawo menu",
+    "closeMenu": "Ggalawo menu"
+  }
+}
