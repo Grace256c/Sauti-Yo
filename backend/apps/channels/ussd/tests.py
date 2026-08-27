@@ -850,11 +850,23 @@ class SafetyGateTests(TestCase):
         self.assertEqual(context["chunk_index"], 0)
 
     def test_transition_rejects_invalid_choice_on_last_chunk(self):
-        self.assertIsNone(menus.transition_safety_gate(self._session(9999), "9"))
+        self.assertIsNone(menus.transition_safety_gate(self._session(9999), "5"))
+
+    def test_transition_back_on_last_chunk_returns_via_back_from_topic(self):
+        next_state, context = menus.transition_safety_gate(self._session(9999), "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
+
+    def test_transition_back_before_last_chunk_returns_via_back_from_topic(self):
+        next_state, context = menus.transition_safety_gate(self._session(0), "9")
+        self.assertEqual(next_state, "situation_list")
+        self.assertEqual(context, {"page": 0})
 
     def test_render_last_chunk_does_not_end_session(self):
         text, ended = menus.render_safety_gate(self._session(9999))
         self.assertIn("1. Continue", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_falls_back_to_summary_when_no_safety_response(self):
