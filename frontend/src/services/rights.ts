@@ -36,6 +36,24 @@ export interface RightsSupportService {
   is_active: boolean;
 }
 
+export interface RightsLegalProvision {
+  id: number;
+  source_type: string;
+  law_title: string;
+  provision_reference: string;
+  provision_heading: string;
+  provision_text: string;
+  plain_language_explanation: string;
+  source_url: string;
+  jurisdiction: string;
+  reviewed_by: string;
+  last_reviewed: string | null;
+  next_review_due: string | null;
+  verification_status: string;
+  order: number;
+  is_active: boolean;
+}
+
 export interface RightsTopic {
   id: number;
   slug: string;
@@ -49,6 +67,7 @@ export interface RightsTopic {
   next_review_due: string | null;
   verification_status: string;
   support_services: RightsSupportService[];
+  legal_provisions: RightsLegalProvision[];
   action_steps: RightsActionStep[];
   safety_responses: RightsSafetyResponse[];
   is_active: boolean;

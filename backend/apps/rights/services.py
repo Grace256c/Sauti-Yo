@@ -34,6 +34,7 @@ def get_situation_detail(slug):
             "rights_links__rights_topic__action_steps",
             "rights_links__rights_topic__safety_responses",
             "rights_links__rights_topic__support_services",
+            "rights_links__rights_topic__legal_provisions",
         ).get(slug=slug, is_active=True)
     except Situation.DoesNotExist:
         return None
@@ -65,6 +66,25 @@ def get_situation_detail(slug):
                     "is_emergency_service": s.is_emergency_service,
                 }
                 for s in topic.support_services.filter(is_active=True)
+            ],
+            "legal_provisions": [
+                {
+                    "source_type": provision.source_type,
+                    "law_title": provision.law_title,
+                    "provision_reference":
+                        provision.provision_reference,
+                    "provision_heading":
+                        provision.provision_heading,
+                    "plain_language_explanation":
+                        provision.plain_language_explanation,
+                    "source_url": provision.source_url,
+                    "jurisdiction": provision.jurisdiction,
+                    "verification_status":
+                        provision.verification_status,
+                }
+                for provision in topic.legal_provisions.filter(
+                    is_active=True
+                ).order_by("order", "id")
             ],
         })
 

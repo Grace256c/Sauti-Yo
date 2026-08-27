@@ -3,6 +3,7 @@ from django.test import TestCase
 from apps.content.models import ChannelContent
 from apps.rights.models import (
     ActionStep,
+    LegalProvision,
     RightsTopic,
     SafetyResponse,
     Situation,
@@ -58,6 +59,27 @@ class RightsServicesTests(TestCase):
         )
         self.topic.support_services.add(self.support_service)
 
+
+        self.legal_provision = LegalProvision.objects.create(
+            rights_topic=self.topic,
+            source_type="act",
+            law_title="Domestic Violence Act, 2010",
+            provision_reference="Section 10",
+            provision_heading="Protection orders",
+            provision_text=(
+                "Reviewed legal provision text."
+            ),
+            plain_language_explanation=(
+                "A person experiencing domestic violence may "
+                "seek a protection order where the law allows."
+            ),
+            source_url="https://example.com/domestic-violence-act",
+            jurisdiction="Uganda",
+            verification_status="verified",
+            order=1,
+            is_active=True,
+        )
+
     def test_list_active_situations_returns_active_only(self):
         result = list_active_situations()
         slugs = [item["slug"] for item in result]
@@ -79,6 +101,26 @@ class RightsServicesTests(TestCase):
         self.assertEqual(
             topic["support_services"][0]["name"],
             "Sauti 116 - Child & GBV Helpline",
+        )
+
+
+        self.assertEqual(
+            len(topic["legal_provisions"]),
+            1,
+        )
+
+        self.assertEqual(
+            topic["legal_provisions"][0][
+                "law_title"
+            ],
+            "Domestic Violence Act, 2010",
+        )
+
+        self.assertEqual(
+            topic["legal_provisions"][0][
+                "provision_reference"
+            ],
+            "Section 10",
         )
 
     def test_get_situation_detail_returns_none_for_missing_slug(self):
@@ -121,3 +163,50 @@ class RightsServicesTests(TestCase):
         )
         message = get_safety_message("fallback-test", "immediate_danger")
         self.assertEqual(message, "Fallback safety message.")
+
+
+
+class LegalProvisionTests(TestCase):
+    def test_legal_provision_preserves_structured_reference(
+        self,
+    ):
+        topic = RightsTopic.objects.create(
+            slug="equality-rights",
+            title="Equality rights",
+            summary="General equality information.",
+        )
+
+        provision = LegalProvision.objects.create(
+            rights_topic=topic,
+            source_type="constitution",
+            law_title=(
+                "Constitution of the Republic of Uganda"
+            ),
+            provision_reference="Article 21",
+            provision_heading=(
+                "Equality and freedom from discrimination"
+            ),
+            plain_language_explanation=(
+                "The Constitution protects equality "
+                "before and under the law."
+            ),
+            verification_status="review_required",
+        )
+
+        self.assertEqual(
+            provision.provision_reference,
+            "Article 21",
+        )
+
+        self.assertEqual(
+            provision.source_type,
+            "constitution",
+        )
+
+        self.assertEqual(
+            str(provision),
+            (
+                "Constitution of the Republic of Uganda "
+                "— Article 21"
+            ),
+        )

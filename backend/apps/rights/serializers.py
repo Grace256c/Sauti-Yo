@@ -6,6 +6,7 @@ from apps.support.serializers import (
 
 from .models import (
     ActionStep,
+    LegalProvision,
     RightsTopic,
     SafetyResponse,
     Situation,
@@ -39,6 +40,30 @@ class SafetyResponseSerializer(
         ]
 
 
+class LegalProvisionSerializer(
+    serializers.ModelSerializer
+):
+    class Meta:
+        model = LegalProvision
+        fields = [
+            "id",
+            "source_type",
+            "law_title",
+            "provision_reference",
+            "provision_heading",
+            "provision_text",
+            "plain_language_explanation",
+            "source_url",
+            "jurisdiction",
+            "reviewed_by",
+            "last_reviewed",
+            "next_review_due",
+            "verification_status",
+            "order",
+            "is_active",
+        ]
+
+
 class RightsTopicSerializer(serializers.ModelSerializer):
     action_steps = ActionStepSerializer(
         many=True,
@@ -51,6 +76,12 @@ class RightsTopicSerializer(serializers.ModelSerializer):
     )
 
     support_services = SupportServiceSerializer(
+        many=True,
+        read_only=True,
+    )
+
+
+    legal_provisions = LegalProvisionSerializer(
         many=True,
         read_only=True,
     )
@@ -70,6 +101,7 @@ class RightsTopicSerializer(serializers.ModelSerializer):
             "next_review_due",
             "verification_status",
             "support_services",
+            "legal_provisions",
             "action_steps",
             "safety_responses",
             "is_active",

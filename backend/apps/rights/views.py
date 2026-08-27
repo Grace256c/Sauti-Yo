@@ -17,6 +17,7 @@ class SituationListAPIView(generics.ListAPIView):
                 "rights_links__rights_topic__action_steps",
                 "rights_links__rights_topic__safety_responses",
                 "rights_links__rights_topic__support_services",
+                "rights_links__rights_topic__legal_provisions",
             )
             .order_by("title")
         )
@@ -35,6 +36,7 @@ class SituationDetailAPIView(
                 "rights_links__rights_topic__action_steps",
                 "rights_links__rights_topic__safety_responses",
                 "rights_links__rights_topic__support_services",
+                "rights_links__rights_topic__legal_provisions",
             )
         )
 
@@ -51,6 +53,7 @@ class RightsTopicListAPIView(
                 "action_steps",
                 "safety_responses",
                 "support_services",
+                "legal_provisions",
             )
             .order_by("title")
         )
@@ -69,5 +72,6 @@ class RightsTopicDetailAPIView(
                 "action_steps",
                 "safety_responses",
                 "support_services",
+                "legal_provisions",
             )
         )
