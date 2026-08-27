@@ -47,6 +47,10 @@ AFRICASTALKING_SMS_SENDER_ID = os.getenv("AFRICASTALKING_SMS_SENDER_ID", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL") or "claude-haiku-4-5"
 
+# Speech-to-text (transcription only - Claude remains the only model used
+# for classification/rewording, see apps.channels.sms.ai_classifier)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
 # Application definition
 
 INSTALLED_APPS = [
