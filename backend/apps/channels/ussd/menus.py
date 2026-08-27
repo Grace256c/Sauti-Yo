@@ -570,7 +570,8 @@ def render_action_steps(session):
     back_label = get_copy("ussd.back", session.language)
     if not steps:
         body = get_copy("ussd.no_action_steps", session.language)
-        return f"{body}\n\n0. {back_label}", False
+        exit_label = get_copy("ussd.exit", session.language)
+        return f"{body}\n\n9. {back_label}\n0. {exit_label}", False
 
     step_index = min(session.context.get("step_index", 0), len(steps) - 1)
     step = steps[step_index]
@@ -580,9 +581,9 @@ def render_action_steps(session):
     has_next = step_index + 1 < len(steps)
     if has_next:
         next_label = get_copy("ussd.next", session.language)
-        trailing = f"1. {next_label}\n0. {back_label}"
+        trailing = f"1. {next_label}\n9. {back_label}"
     else:
-        trailing = f"0. {back_label}"
+        trailing = f"9. {back_label}"
 
     screen, _ = _chunked_screen(text, chunk_index, trailing, session.language)
     return screen, False
@@ -599,7 +600,7 @@ def transition_action_steps(session, user_input):
         topic.action_steps.filter(is_active=True).order_by("order", "id")
     )
     if not steps:
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
@@ -611,9 +612,9 @@ def transition_action_steps(session, user_input):
     back_label = get_copy("ussd.back", session.language)
     if has_next:
         next_label = get_copy("ussd.next", session.language)
-        trailing = f"1. {next_label}\n0. {back_label}"
+        trailing = f"1. {next_label}\n9. {back_label}"
     else:
-        trailing = f"0. {back_label}"
+        trailing = f"9. {back_label}"
     _, is_last = _chunked_screen(text, chunk_index, trailing, session.language)
 
     if not is_last:
@@ -622,7 +623,7 @@ def transition_action_steps(session, user_input):
                 "action_steps",
                 {**session.context, "chunk_index": chunk_index + 1},
             )
-        if user_input == "0":
+        if user_input == "9":
             return _back_to_topic_detail(situation_slug, topic_slug)
         return None
 
@@ -636,7 +637,7 @@ def transition_action_steps(session, user_input):
                 "chunk_index": 0,
             },
         )
-    if user_input == "0":
+    if user_input == "9":
         return _back_to_topic_detail(situation_slug, topic_slug)
     return None
 

@@ -920,6 +920,7 @@ class ActionStepsTests(TestCase):
         text, ended = menus.render_action_steps(self._session())
         self.assertIn("Step 1/2", text)
         self.assertIn("1.", text)
+        self.assertIn("0. Exit", text)
         self.assertFalse(ended)
 
     def test_render_last_step_has_no_next_option(self):
@@ -934,7 +935,7 @@ class ActionStepsTests(TestCase):
         self.assertEqual(context["chunk_index"], 0)
 
     def test_transition_back_returns_to_topic_detail(self):
-        next_state, context = menus.transition_action_steps(self._session(), "0")
+        next_state, context = menus.transition_action_steps(self._session(), "9")
         self.assertEqual(next_state, "topic_detail")
         self.assertEqual(context["chunk_index"], 9999)
 
@@ -942,6 +943,14 @@ class ActionStepsTests(TestCase):
         ActionStep.objects.all().delete()
         text, ended = menus.render_action_steps(self._session())
         self.assertIn("No action steps", text)
+        self.assertIn("9. Back", text)
+        self.assertIn("0. Exit", text)
+
+    def test_transition_back_with_no_steps_returns_to_topic_detail(self):
+        ActionStep.objects.all().delete()
+        next_state, context = menus.transition_action_steps(self._session(), "9")
+        self.assertEqual(next_state, "topic_detail")
+        self.assertEqual(context["chunk_index"], 9999)
 
 
 from apps.support.models import SupportService
