@@ -24,9 +24,9 @@ DEFAULT_COPY = {
     "ussd.no_situations": "No situations are available right now.",
     "ussd.choose_situation": "Choose a situation:",
     "ussd.related_rights": "Related rights:",
-    "ussd.topic_menu": "1. Action steps\n2. Support contacts\n0. Back",
-    "ussd.safety_continue": "1. Continue\n0. Back",
-    "ussd.continue": "1. Continue\n0. Back",
+    "ussd.topic_menu": "1. Action steps\n2. Support contacts\n9. Back",
+    "ussd.safety_continue": "1. Continue\n9. Back",
+    "ussd.continue": "1. Continue\n9. Back",
     "ussd.no_action_steps": (
         "No action steps are available for this topic."
     ),
@@ -37,6 +37,7 @@ DEFAULT_COPY = {
     "ussd.more": "More",
     "ussd.back": "Back",
     "ussd.next": "Next",
+    "ussd.exit": "Exit",
     "ussd.unreviewed_notice": "Note: not yet reviewed.",
 }
 
@@ -189,8 +190,12 @@ def _enter_topic(situation_slug, topic):
 def _chunked_screen(text, chunk_index, trailing_options, language):
     more = get_copy("ussd.more", language)
     back = get_copy("ussd.back", language)
-    more_back = f"1. {more}\n0. {back}"
-    reserved = max(len(trailing_options), len(more_back))
+    exit_line = f"0. {get_copy('ussd.exit', language)}"
+    more_back = f"1. {more}\n9. {back}\n{exit_line}"
+    final_trailing = (
+        f"{trailing_options}\n{exit_line}" if trailing_options else exit_line
+    )
+    reserved = max(len(final_trailing), len(more_back))
     body_budget = max(SCREEN_BUDGET - reserved - 2, 20)
 
     chunks = chunk_text(text, budget=body_budget) if text else [""]
@@ -198,7 +203,7 @@ def _chunked_screen(text, chunk_index, trailing_options, language):
     body = chunks[chunk_index]
     is_last = chunk_index == len(chunks) - 1
     if is_last:
-        screen = f"{body}\n\n{trailing_options}" if trailing_options else body
+        screen = f"{body}\n\n{final_trailing}"
     else:
         screen = f"{body}\n\n{more_back}"
     return screen, is_last

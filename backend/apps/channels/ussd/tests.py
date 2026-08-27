@@ -120,6 +120,27 @@ class TextHelperTests(TestCase):
         self.assertFalse(has_more)
 
 
+class ChunkedScreenTests(TestCase):
+    def test_final_chunk_includes_exit_and_uses_nine_for_back(self):
+        screen, is_last = menus._chunked_screen(
+            "Body text", 0, "1. Continue\n9. Back", "en"
+        )
+        self.assertTrue(is_last)
+        self.assertIn("0. Exit", screen)
+        self.assertIn("9. Back", screen)
+
+    def test_intermediate_chunk_includes_more_back_and_exit(self):
+        long_text = " ".join(["word"] * 60)
+        screen, is_last = menus._chunked_screen(
+            long_text, 0, "1. Continue\n9. Back", "en"
+        )
+        self.assertFalse(is_last)
+        self.assertIn("1. More", screen)
+        self.assertIn("9. Back", screen)
+        self.assertIn("0. Exit", screen)
+        self.assertLessEqual(len(screen), 182)
+
+
 class GetCopyTests(TestCase):
     def test_falls_back_to_default_when_no_channel_content_row(self):
         text = menus.get_copy("ussd.main_menu", "en")
@@ -152,6 +173,18 @@ class GetCopyTests(TestCase):
         )
         text = menus.get_copy("ussd.main_menu", "en")
         self.assertEqual(text, menus.DEFAULT_COPY["ussd.main_menu"])
+
+    def test_exit_copy_defaults_to_exit_label(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "en"), "Exit")
+
+    def test_topic_menu_copy_uses_nine_for_back(self):
+        self.assertIn("9. Back", menus.get_copy("ussd.topic_menu", "en"))
+
+    def test_continue_copy_uses_nine_for_back(self):
+        self.assertIn("9. Back", menus.get_copy("ussd.continue", "en"))
+
+    def test_safety_continue_copy_uses_nine_for_back(self):
+        self.assertIn("9. Back", menus.get_copy("ussd.safety_continue", "en"))
 
 
 class LanguageSelectTests(TestCase):
