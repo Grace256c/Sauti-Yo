@@ -1340,6 +1340,26 @@ class UssdCallbackViewTests(TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+class SeededTranslationCopyTests(TestCase):
+    def test_luganda_topic_menu_uses_nine_for_back(self):
+        self.assertIn("9. Ddayo", menus.get_copy("ussd.topic_menu", "lg"))
+
+    def test_luganda_exit_copy_is_seeded(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "lg"), "Fuluma")
+
+    def test_kiswahili_continue_uses_nine_for_back(self):
+        self.assertIn("9. Rudi", menus.get_copy("ussd.continue", "sw"))
+
+    def test_kiswahili_exit_copy_is_seeded(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "sw"), "Toka")
+
+    def test_runyankole_safety_continue_uses_nine_for_back(self):
+        self.assertIn("9. Garuka", menus.get_copy("ussd.safety_continue", "nyn"))
+
+    def test_runyankole_exit_copy_is_seeded(self):
+        self.assertEqual(menus.get_copy("ussd.exit", "nyn"), "Rugamu")
+
+
 class UnreviewedNoticeTests(TestCase):
     def test_prepend_notice_leaves_verified_text_unchanged(self):
         text = menus._prepend_unreviewed_notice("Some text.", "verified", "en")
