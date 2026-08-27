@@ -22,7 +22,7 @@
 
 **Files:**
 - Modify: `backend/apps/channels/models.py`
-- Create: `backend/apps/channels/migrations/0011_smscontext_pending_referral_step.py` (via `makemigrations`)
+- Create: `backend/apps/channels/migrations/0012_smscontext_pending_referral_step.py` (via `makemigrations`)
 - Test: `backend/apps/channels/sms/tests.py`
 
 **Interfaces:**
@@ -83,10 +83,10 @@ with:
 - [ ] **Step 4: Generate and apply the migration**
 
 Run: `cd backend && python3 manage.py makemigrations channels`
-Expected: creates `backend/apps/channels/migrations/0011_smscontext_pending_referral_step.py`, depending on `0010_merge_20260827_1453` (the current single migration leaf in this app — confirm the generated file's `dependencies` names it).
+Expected: creates `backend/apps/channels/migrations/0012_smscontext_pending_referral_step.py`, depending on `0011_merge_20260827_1652` (the current single migration leaf in this app — confirm the generated file's `dependencies` names it).
 
 Run: `cd backend && python3 manage.py migrate channels`
-Expected: `Applying channels.0011_smscontext_pending_referral_step... OK`
+Expected: `Applying channels.0012_smscontext_pending_referral_step... OK`
 
 - [ ] **Step 5: Run the test to verify it passes**
 
@@ -96,7 +96,7 @@ Expected: PASS (6 tests: the 4 pre-existing plus the 2 new ones)
 - [ ] **Step 6: Commit**
 
 ```bash
-git add backend/apps/channels/models.py backend/apps/channels/migrations/0011_smscontext_pending_referral_step.py backend/apps/channels/sms/tests.py
+git add backend/apps/channels/models.py backend/apps/channels/migrations/0012_smscontext_pending_referral_step.py backend/apps/channels/sms/tests.py
 git commit -m "feat: add SmsContext.pending_referral_step for the referral consent/district flow"
 ```
 
