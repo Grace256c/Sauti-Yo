@@ -45,23 +45,23 @@ const situations = [
 const steps = [
   {
     number: "01",
-    title: "Tell us what happened",
-    text: "Choose the situation that best describes what you are experiencing.",
+    title: "Share what happened",
+    text: "In your own words — no legal terms needed.",
   },
   {
     number: "02",
-    title: "Understand your rights",
-    text: "Get clear, accessible information relevant to that situation.",
+    title: "Know your rights",
+    text: "See exactly what protects you, explained plainly.",
   },
   {
     number: "03",
-    title: "See what you can do next",
-    text: "Explore practical actions, safety considerations and possible next steps.",
+    title: "Get your next step",
+    text: "A clear action to take, not just information.",
   },
   {
     number: "04",
-    title: "Connect with support",
-    text: "Find appropriate organisations and services when additional help is needed.",
+    title: "Reach real support",
+    text: "Connect with help when you need more than answers.",
   },
 ];
 
@@ -270,12 +270,12 @@ export default function Home() {
             </div>
 
             <h2 className="heading-serif text-3xl font-semibold text-text-primary sm:text-4xl lg:text-5xl">
-              From uncertainty to a practical next step
+              Four steps. That's it.
             </h2>
 
             <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-text-secondary">
-              Sauti Yo turns complex rights information into a simple journey
-              that helps people understand, decide and act.
+              Here's a quick look at the journey — see how it works for the
+              full walkthrough of what each step actually involves.
             </p>
           </div>
 

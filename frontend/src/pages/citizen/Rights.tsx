@@ -14,20 +14,20 @@ const nextSteps = [
   {
     icon: BookOpen,
     number: "01",
-    title: "Understand",
-    text: "Get clear information in plain language about rights that may be relevant to your situation.",
+    title: "You'll answer a few questions",
+    text: "A short, guided conversation about your specific situation — nothing more than necessary.",
   },
   {
     icon: Scale,
     number: "02",
-    title: "Decide",
-    text: "Explore practical options, important considerations and possible next steps.",
+    title: "You'll see what applies to you",
+    text: "Not general information — the specific rights, options and considerations relevant to what you told us.",
   },
   {
     icon: Building2,
     number: "03",
-    title: "Connect",
-    text: "Find appropriate organisations or support services when information alone is not enough.",
+    title: "You'll know what to do",
+    text: "A clear next step, plus a way to reach real support if your situation needs more than information.",
   },
 ];
 
@@ -205,20 +205,20 @@ export default function Rights() {
                 <span className="gold-rule" />
 
                 <p className="text-xs font-bold uppercase tracking-[0.2em] text-gold-deep dark:text-gold">
-                  What happens next
+                  Once you choose a category
                 </p>
               </div>
 
               <h2 className="heading-serif text-3xl font-semibold leading-tight text-text-primary sm:text-4xl lg:text-5xl">
-                Rights information is only useful
+                Here's exactly
                 <span className="block text-gold-deep dark:text-gold">
-                  when it helps you act.
+                  what happens next.
                 </span>
               </h2>
 
               <p className="mt-5 max-w-md text-base leading-7 text-text-secondary">
-                Sauti Yo is designed to help move people from uncertainty
-                toward a clearer, more informed next step.
+                Picking a category above starts this guide. It only takes
+                a couple of minutes.
               </p>
             </div>
 
