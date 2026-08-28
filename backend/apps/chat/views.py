@@ -22,9 +22,14 @@ class ChatAPIView(APIView):
         if not isinstance(language, str):
             language = "en"
 
+        situation_slug = request.data.get("situation_slug")
+        if not isinstance(situation_slug, str):
+            situation_slug = None
+
         result = build_chat_response(
             message=message,
             language=language,
+            situation_slug=situation_slug,
         )
 
         return Response(

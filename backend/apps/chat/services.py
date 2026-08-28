@@ -18,6 +18,13 @@ SLUG_ALIASES = {
     "home-safety": "domestic-violence",
 }
 
+
+SITUATION_PHRASES = {
+    "domestic violence": "domestic-violence",
+    "violence at home": "domestic-violence",
+    "abuse at home": "domestic-violence",
+}
+
 SUPPORTED_LANGUAGES = {
     "en": "English",
     "lg": "Luganda",
@@ -49,6 +56,56 @@ def normalize_situation_slug(slug):
     return SLUG_ALIASES.get(slug, slug)
 
 
+FOLLOW_UP_MARKERS = (
+    "next step",
+    "next steps",
+    "what should i do",
+    "what can i do",
+    "what do i do",
+    "what action can i take",
+    "what legal action",
+    "what are my options",
+    "guide me",
+    "help me with this",
+    "what happens next",
+    "report this",
+    "report it",
+    "can i report",
+    "should i report",
+    "this situation",
+    "this issue",
+    "my situation",
+    "my case",
+    "about this",
+    "about it",
+    "where do i go",
+    "who can help",
+    "who should i contact",
+)
+
+
+def should_reuse_situation(message):
+    """
+    Return True when a message appears to depend on the
+    previously identified Rights-to-Action situation.
+
+    This provides lightweight conversational continuity
+    without forcing an old situation into unrelated legal
+    questions.
+    """
+    normalized = " ".join(
+        (message or "").lower().strip().split()
+    )
+
+    if not normalized:
+        return False
+
+    return any(
+        marker in normalized
+        for marker in FOLLOW_UP_MARKERS
+    )
+
+
 def find_situation(message):
     """
     Try the existing Sauti Yo keyword/AI situation matcher.
@@ -56,6 +113,19 @@ def find_situation(message):
     This remains useful for practical guidance such as
     housing, workplace, domestic violence, and support referrals.
     """
+    normalized_message = " ".join(
+        (message or "").lower().strip().split()
+    )
+
+    for phrase, slug in SITUATION_PHRASES.items():
+        if phrase in normalized_message:
+            detail = get_situation_detail(
+                normalize_situation_slug(slug)
+            )
+
+            if detail:
+                return detail
+
     slug = keywords.match_situation(message)
     slug = normalize_situation_slug(slug)
 
@@ -131,6 +201,127 @@ def build_context(detail):
                 )
 
     return "\n".join(sections)
+
+
+def build_verified_fallback(message, detail):
+    """
+    Build a useful response from verified/local Sauti Yo data
+    when the external AI service is unavailable.
+    """
+    parts = []
+
+    if detail:
+        description = (detail.get("description") or "").strip()
+
+        if description:
+            parts.append(description)
+
+        action_steps = []
+
+        for topic in detail.get("rights_topics", []):
+            for step in topic.get("action_steps", []):
+                action_steps.append(step)
+
+        if action_steps:
+            lines = ["Next steps:"]
+
+            for index, step in enumerate(action_steps[:4], start=1):
+                title = (step.get("title") or "").strip()
+                step_description = (
+                    step.get("description") or ""
+                ).strip()
+
+                if title and step_description:
+                    lines.append(
+                        f"{index}. {title}: {step_description}"
+                    )
+                elif step_description:
+                    lines.append(
+                        f"{index}. {step_description}"
+                    )
+                elif title:
+                    lines.append(
+                        f"{index}. {title}"
+                    )
+
+            if len(lines) > 1:
+                parts.append("\n".join(lines))
+
+        safety_messages = []
+
+        for topic in detail.get("rights_topics", []):
+            for response in topic.get("safety_responses", []):
+                message_text = (
+                    response.get("message") or ""
+                ).strip()
+
+                if (
+                    message_text
+                    and message_text not in safety_messages
+                ):
+                    safety_messages.append(message_text)
+
+        if safety_messages:
+            parts.append(
+                "Safety guidance:\n"
+                + "\n".join(safety_messages[:2])
+            )
+
+    legal_sections = search_legal_sections(
+        message,
+        limit=3,
+    )
+
+    if legal_sections:
+        legal_lines = [
+            (
+                "Relevant verified legal information:"
+                if detail
+                else
+                "I found the following verified legal information:"
+            )
+        ]
+
+        for section in legal_sections:
+            document_name = (
+                section.document.short_title
+                or section.document.title
+            )
+
+            reference_label = (
+                "Article"
+                if (
+                    section.section_type == "article"
+                    or section.document.document_type
+                    == "constitution"
+                )
+                else "Section"
+            )
+
+            reference = (
+                f"{reference_label} "
+                f"{section.section_number} "
+                f"of {document_name}"
+            )
+
+            heading = (section.heading or "").strip()
+
+            if heading:
+                reference += f" — {heading}"
+
+            legal_lines.append(reference)
+
+            section_text = (section.text or "").strip()
+
+            if section_text:
+                legal_lines.append(section_text)
+
+        parts.append("\n".join(legal_lines))
+
+    if not parts:
+        return None
+
+    return "\n\n".join(parts)
 
 
 def generate_ai_reply(
@@ -261,6 +452,7 @@ SAUTI YO PRACTICAL GUIDANCE:
 def build_chat_response(
     message,
     language="en",
+    situation_slug=None,
 ):
     """
     Main entry point used by the /api/chat/ endpoint.
@@ -277,9 +469,27 @@ def build_chat_response(
             "situation": None,
         }
 
-    # Existing Rights-to-Action matching remains useful
-    # for practical guidance and support referrals.
+    # First try to identify a situation from the current
+    # message. A newly identified situation always takes
+    # priority over previous conversation context.
     detail = find_situation(message)
+
+    # For short contextual follow-up questions such as
+    # "what should I do next?" or "can I report this?",
+    # reuse the previously matched Rights-to-Action situation.
+    #
+    # We deliberately do not reuse it for every message.
+    # This allows the user to change topic and ask general
+    # legal questions without stale situation context being
+    # forced into the answer.
+    if (
+        detail is None
+        and situation_slug
+        and should_reuse_situation(message)
+    ):
+        detail = get_situation_detail(
+            normalize_situation_slug(situation_slug)
+        )
 
     # The AI also searches the Constitution independently,
     # so a RightsTopic match is NOT required for the
@@ -305,16 +515,25 @@ def build_chat_response(
             ),
         }
 
-    # Safe fallback if OpenAI is unavailable.
-    if detail:
+    # Use verified/local content when OpenAI is unavailable.
+    fallback_reply = build_verified_fallback(
+        message=message,
+        detail=detail,
+    )
+
+    if fallback_reply:
         return {
             "matched": True,
-            "reply": detail["description"],
-            "situation": {
-                "slug": detail["slug"],
-                "title": detail["title"],
-                "risk_level": detail["risk_level"],
-            },
+            "reply": fallback_reply,
+            "situation": (
+                {
+                    "slug": detail["slug"],
+                    "title": detail["title"],
+                    "risk_level": detail["risk_level"],
+                }
+                if detail
+                else None
+            ),
         }
 
     return {
