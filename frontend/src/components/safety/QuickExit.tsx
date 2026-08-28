@@ -35,16 +35,17 @@ export default function QuickExit() {
       title="Quickly leave this site (or press Esc)"
       className="
         fixed right-3 top-3 z-[100]
-        flex items-center gap-1.5
-        rounded-full bg-red-600 px-3.5 py-2
-        text-xs font-bold uppercase tracking-wide text-white
-        shadow-lg transition
-        hover:bg-red-700
-        focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2
+        flex h-11 items-center gap-1.5
+        rounded-md border border-red-600/50 bg-surface/95
+        px-3.5 text-xs font-semibold text-red-600
+        shadow-sm backdrop-blur-md transition-all duration-200
+        hover:border-red-600 hover:bg-red-600 hover:text-white
+        focus:outline-none focus:ring-2 focus:ring-red-500/30
+        dark:text-red-500 dark:hover:text-white
         sm:right-4 sm:top-4 sm:text-sm
       "
     >
-      <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+      <X className="h-4 w-4" />
       Quick Exit
     </button>
   );
