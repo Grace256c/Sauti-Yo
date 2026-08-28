@@ -45,7 +45,7 @@ class SessionHelperTests(TestCase):
             "new-session", "+256700000000"
         )
         self.assertTrue(created)
-        self.assertEqual(session.state, "awaiting_recording")
+        self.assertEqual(session.state, "language_select")
 
     def test_get_or_create_session_returns_existing_session(self):
         sessions.get_or_create_session("existing", "+256700000000")
@@ -148,11 +148,23 @@ class TranscribeRecordingTests(TestCase):
 
 
 class IvrXmlTests(TestCase):
-    def test_greeting_includes_say_and_record(self):
-        xml = ivr.build_greeting_xml()
+    def test_language_menu_includes_say_and_getdigits(self):
+        xml = ivr.build_language_menu_xml()
         self.assertIn("<Response>", xml)
         self.assertIn("<Say>", xml)
-        self.assertIn("<Record", xml)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Press 1 for English", xml)
+        self.assertIn("Press 2 for Luganda", xml)
+        self.assertIn("Press 3 for Kiswahili", xml)
+        self.assertIn("Press 4 for Runyankole", xml)
+        self.assertIn("Press 0 to exit", xml)
+
+    def test_main_menu_includes_rights_help_and_exit(self):
+        xml = ivr.build_main_menu_xml()
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Press 1 to find your rights", xml)
+        self.assertIn("Press 2 to get help now", xml)
+        self.assertIn("Press 0 to exit", xml)
 
     def test_safety_checkin_normal_asks_are_you_safe(self):
         xml = ivr.build_safety_checkin_xml(discreet=False)
@@ -244,11 +256,138 @@ class HandleVoiceRequestTests(TestCase):
             return_value=text,
         )
 
-    def test_call_start_returns_greeting(self):
+    def test_call_start_returns_language_menu(self):
         xml = handle_voice_request("sess-1", "+256700000000", "1", "", "")
-        self.assertIn("<Record", xml)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Press 1 for English", xml)
         session = VoiceSession.objects.get(session_id="sess-1")
-        self.assertEqual(session.state, "awaiting_recording")
+        self.assertEqual(session.state, "language_select")
+
+    def test_english_language_selection_opens_main_menu(self):
+        handle_voice_request("sess-lang-en", "+256700000000", "1", "", "")
+        xml = handle_voice_request(
+            "sess-lang-en", "+256700000000", "1", "1", ""
+        )
+
+        self.assertIn("Main menu", xml)
+        self.assertIn("find your rights", xml)
+
+        session = VoiceSession.objects.get(session_id="sess-lang-en")
+        self.assertEqual(session.context["language"], "en")
+        self.assertEqual(session.state, "main_menu")
+
+    def test_language_selection_maps_supported_languages(self):
+        cases = (
+            ("2", "lg"),
+            ("3", "sw"),
+            ("4", "nyn"),
+        )
+
+        for index, (digit, expected_language) in enumerate(cases):
+            session_id = f"sess-lang-{index}"
+            handle_voice_request(session_id, "+256700000000", "1", "", "")
+            xml = handle_voice_request(
+                session_id, "+256700000000", "1", digit, ""
+            )
+
+            self.assertIn("Main menu", xml)
+
+            session = VoiceSession.objects.get(session_id=session_id)
+            self.assertEqual(
+                session.context["language"], expected_language
+            )
+            self.assertEqual(session.state, "main_menu")
+
+    def test_language_zero_ends_session(self):
+        handle_voice_request("sess-lang-exit", "+256700000000", "1", "", "")
+        xml = handle_voice_request(
+            "sess-lang-exit", "+256700000000", "1", "0", ""
+        )
+
+        self.assertIn("Thank you", xml)
+
+        session = VoiceSession.objects.get(session_id="sess-lang-exit")
+        self.assertFalse(session.is_active)
+        self.assertEqual(session.state, "ended")
+
+    def test_main_menu_get_help_opens_emergency_list(self):
+        handle_voice_request(
+            "sess-help",
+            "+256700000000",
+            "1",
+            "",
+            "",
+        )
+
+        handle_voice_request(
+            "sess-help",
+            "+256700000000",
+            "1",
+            "1",
+            "",
+        )
+
+        xml = handle_voice_request(
+            "sess-help",
+            "+256700000000",
+            "1",
+            "2",
+            "",
+        )
+
+        self.assertIn("emergency contacts", xml.lower())
+
+        session = VoiceSession.objects.get(
+            session_id="sess-help"
+        )
+        self.assertEqual(session.state, "emergency_list")
+        self.assertEqual(
+            session.context.get("language"),
+            "en",
+        )
+
+    def test_emergency_list_back_returns_main_menu(self):
+        session = VoiceSession.objects.create(
+            session_id="sess-help-back",
+            phone_number="+256700000000",
+            state="emergency_list",
+            context={"language": "en"},
+        )
+
+        xml = handle_voice_request(
+            session.session_id,
+            session.phone_number,
+            "1",
+            "9",
+            "",
+        )
+
+        self.assertIn("Main menu", xml)
+
+        session.refresh_from_db()
+        self.assertEqual(session.state, "main_menu")
+
+    def test_emergency_list_zero_ends_call(self):
+        session = VoiceSession.objects.create(
+            session_id="sess-help-exit",
+            phone_number="+256700000000",
+            state="emergency_list",
+            context={"language": "en"},
+        )
+
+        xml = handle_voice_request(
+            session.session_id,
+            session.phone_number,
+            "1",
+            "0",
+            "",
+        )
+
+        self.assertIn("Thank you", xml)
+
+        session.refresh_from_db()
+        self.assertFalse(session.is_active)
+        self.assertEqual(session.state, "ended")
 
     def test_recording_with_danger_words_speaks_safety_reply_with_connect_offer(self):
         SupportService.objects.create(
@@ -424,25 +563,22 @@ class HandleVoiceRequestTests(TestCase):
         session = VoiceSession.objects.get(session_id="sess-6f")
         self.assertFalse(session.is_active)
 
-    def test_no_existing_session_with_empty_digits_still_gets_greeting(self):
+    def test_no_existing_session_with_empty_digits_gets_language_menu(self):
         xml = handle_voice_request("sess-6g", "+256700000000", "1", "", "")
-        self.assertIn("<Record", xml)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Press 1 for English", xml)
         session = VoiceSession.objects.get(session_id="sess-6g")
-        self.assertEqual(session.state, "awaiting_recording")
+        self.assertEqual(session.state, "language_select")
 
-    def test_empty_recording_url_on_existing_recording_session_retries_not_greets(
-        self,
-    ):
-        handle_voice_request("sess-empty-rec", "+256700000000", "1", "", "")
+    def test_language_menu_timeout_reprompts_language_menu(self):
+        handle_voice_request("sess-language-timeout", "+256700000000", "1", "", "")
         xml = handle_voice_request(
-            "sess-empty-rec", "+256700000000", "1", "", ""
+            "sess-language-timeout", "+256700000000", "1", "", ""
         )
-        self.assertIn("<Record", xml)
-        self.assertNotIn("Welcome to Sauti Yo", xml)
-        self.assertIn("Sorry, I didn't catch that", xml)
-        session = VoiceSession.objects.get(session_id="sess-empty-rec")
-        self.assertEqual(session.state, "awaiting_recording")
-        self.assertEqual(session.context.get("attempts"), 1)
+        self.assertIn("<GetDigits", xml)
+        self.assertIn("Welcome to Sauti Yo", xml)
+        session = VoiceSession.objects.get(session_id="sess-language-timeout")
+        self.assertEqual(session.state, "language_select")
 
     def test_discreet_keyword_omits_service_name_from_reply(self):
         _create_home_safety_situation()
