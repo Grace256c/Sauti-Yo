@@ -160,6 +160,13 @@ export default function Header() {
           </button>
 
           <NavLink
+            to="/partner/login"
+            className="whitespace-nowrap px-2 py-2 text-[13px] font-semibold text-text-secondary transition-colors hover:text-gold-deep dark:hover:text-gold xl:text-sm"
+          >
+            Partner Portal
+          </NavLink>
+
+          <NavLink
             to="/rights"
             className="btn-primary ml-1 whitespace-nowrap"
           >
@@ -240,8 +247,15 @@ export default function Header() {
             </nav>
 
             <NavLink
+              to="/partner/login"
+              className="mt-5 flex w-full items-center justify-center rounded-md border border-border px-4 py-3 text-sm font-semibold text-text-primary transition-all duration-200 hover:border-gold hover:bg-gold/10 hover:text-gold-deep dark:hover:text-gold"
+            >
+              Partner Portal
+            </NavLink>
+
+            <NavLink
               to="/rights"
-              className="btn-primary mt-5 w-full"
+              className="btn-primary mt-3 w-full"
             >
               Start Here
             </NavLink>
