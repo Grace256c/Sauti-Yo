@@ -345,6 +345,29 @@ export default function Support() {
         </div>
       </section>
 
+      {/* DIRECT ACCESS */}
+      <section className="border-y border-border bg-surface-soft py-6">
+        <div className="site-container flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-text-primary">
+            No data or a shared device? Reach Sauti Yo directly:
+          </p>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <span className="font-bold text-gold-deep dark:text-gold">
+              USSD *384*163024#
+            </span>
+
+            <span className="font-bold text-gold-deep dark:text-gold">
+              SMS 18275
+            </span>
+
+            <span className="font-bold text-gold-deep dark:text-gold">
+              Call +256 323 200 924
+            </span>
+          </div>
+        </div>
+      </section>
+
       {/* SUPPORT PATHWAYS */}
       <section className="section-padding bg-surface">
         <div className="site-container">

@@ -87,6 +87,28 @@ export default function Community() {
         </div>
       </section>
 
+      <section className="border-y border-border bg-surface-soft py-6">
+        <div className="site-container flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-text-primary">
+            No smartphone? Sauti Yo is also reachable by:
+          </p>
+
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+            <span className="font-bold text-gold-deep dark:text-gold">
+              USSD *384*163024#
+            </span>
+
+            <span className="font-bold text-gold-deep dark:text-gold">
+              SMS 18275
+            </span>
+
+            <span className="font-bold text-gold-deep dark:text-gold">
+              Call +256 323 200 924
+            </span>
+          </div>
+        </div>
+      </section>
+
       <section className="section-padding bg-background">
         <div className="site-container grid gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
           <div>
