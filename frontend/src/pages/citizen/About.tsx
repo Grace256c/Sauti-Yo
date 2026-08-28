@@ -17,20 +17,20 @@ const principles = [
   {
     icon: Ear,
     number: "01",
-    title: "Understand",
-    text: "Begin with what a person is actually experiencing, not the legal terminology they may not know.",
+    title: "Start with the person",
+    text: "Every feature begins with what someone is actually experiencing, not the legal terminology they may not know.",
   },
   {
     icon: Lightbulb,
     number: "02",
-    title: "Act",
-    text: "Turn rights information into practical options and understandable next steps.",
+    title: "Make it usable",
+    text: "Rights information is only worth building if it translates into options a person can actually act on.",
   },
   {
     icon: Users,
     number: "03",
-    title: "Connect",
-    text: "Help people identify appropriate services and support when they need more than information.",
+    title: "Never leave people alone with it",
+    text: "When information isn't enough, people should always have a way to reach real, human support.",
   },
 ];
 
@@ -209,12 +209,12 @@ export default function About() {
             </div>
 
             <h2 className="heading-serif text-3xl font-semibold text-text-primary sm:text-4xl lg:text-5xl">
-              From information to action.
+              Three commitments we don't compromise on.
             </h2>
 
             <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-text-secondary">
-              Sauti Yo is built around a simple journey that helps people move
-              from uncertainty toward a clearer next step.
+              Every part of Sauti Yo — from a single SMS reply to the full
+              web experience — is held to the same three standards.
             </p>
           </div>
 

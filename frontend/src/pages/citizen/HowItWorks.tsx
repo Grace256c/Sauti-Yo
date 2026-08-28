@@ -14,26 +14,26 @@ const steps = [
   {
     number: "01",
     icon: Users,
-    title: "Tell us what happened",
-    text: "Begin with the situation you are experiencing.",
+    title: "Describe your situation",
+    text: "Choose from everyday descriptions like \"my landlord won't return my deposit\" or \"someone at work keeps threatening me\" — no legal terms required.",
   },
   {
     number: "02",
     icon: BookOpen,
-    title: "Understand your rights",
-    text: "Receive relevant rights information in clear language.",
+    title: "Answer a few short questions",
+    text: "A short guided conversation narrows down exactly which rights and protections apply to your specific circumstances.",
   },
   {
     number: "03",
     icon: Scale,
-    title: "Explore your options",
-    text: "See possible next steps and practical considerations.",
+    title: "Review what applies to you",
+    text: "See the specific laws that protect you, a clear next action to take, and anything worth being careful about along the way.",
   },
   {
     number: "04",
     icon: ShieldCheck,
-    title: "Find support",
-    text: "Connect with appropriate services when more help is needed.",
+    title: "Get connected, if you need it",
+    text: "When information alone isn't enough, Sauti Yo can help match you with a verified organisation that can help directly.",
   },
 ];
 
