@@ -16,21 +16,25 @@ const channels = [
     icon: Smartphone,
     title: "Web",
     text: "Use Sauti Yo on a smartphone, tablet or computer.",
+    action: null,
   },
   {
     icon: Phone,
     title: "USSD",
     text: "Use a basic feature phone without mobile data.",
+    action: "Dial *384*163024#",
   },
   {
     icon: MessageSquareText,
     title: "SMS",
     text: "Receive concise guidance and follow-up by text.",
+    action: "Text 18275",
   },
   {
     icon: Headphones,
     title: "Voice",
     text: "Listen to guidance when reading may be difficult.",
+    action: "Call +256 323 200 924",
   },
 ];
 
@@ -90,6 +94,11 @@ export default function Access() {
                   <p className="mt-3 text-sm leading-6 text-text-secondary">
                     {channel.text}
                   </p>
+                  {channel.action && (
+                    <p className="mt-4 text-sm font-bold text-gold-deep dark:text-gold">
+                      {channel.action}
+                    </p>
+                  )}
                 </article>
               );
             })}
@@ -126,6 +135,16 @@ export default function Access() {
               USSD allows a simplified Rights-to-Action experience without
               requiring an app or mobile data.
             </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              <p className="border border-gold bg-gold/10 px-4 py-3 text-sm font-bold text-gold-deep dark:text-gold">
+                Dial *384*163024#
+              </p>
+
+              <p className="border border-border bg-surface px-4 py-3 text-sm font-bold text-text-primary">
+                Text 18275
+              </p>
+            </div>
           </div>
         </div>
       </section>

@@ -32,7 +32,7 @@ const situations = [
   },
   {
     icon: Scale,
-    title: "Land & Property",
+    title: "Land & Housing",
     text: "Explore information related to land, housing and property.",
   },
   {
@@ -70,21 +70,25 @@ const channels = [
     icon: Phone,
     title: "USSD",
     text: "Use a basic feature phone without mobile data.",
+    action: "*384*163024#",
   },
   {
     icon: MessageSquareText,
     title: "SMS",
     text: "Receive clear information and follow-up by text.",
+    action: "18275",
   },
   {
     icon: Headphones,
     title: "Voice",
     text: "Listen to guided information where reading may be difficult.",
+    action: "+256 323 200 924",
   },
   {
     icon: Languages,
     title: "Web",
     text: "Use the richer web experience on a smartphone or computer.",
+    action: null,
   },
 ];
 
@@ -361,6 +365,12 @@ export default function Home() {
                       <p className="mt-1 text-sm leading-6 text-text-secondary">
                         {channel.text}
                       </p>
+
+                      {channel.action && (
+                        <p className="mt-2 text-sm font-bold text-gold-deep dark:text-gold">
+                          {channel.action}
+                        </p>
+                      )}
                     </div>
                   );
                 })}
