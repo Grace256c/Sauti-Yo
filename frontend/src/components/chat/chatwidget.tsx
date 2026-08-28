@@ -15,6 +15,8 @@ import {
   X,
 } from "lucide-react";
 
+import { apiRequest, ApiError } from "../../services/api";
+
 type Message = {
   id: number;
   role: "user" | "assistant";
@@ -85,14 +87,11 @@ export default function ChatWidget() {
     setLoading(true);
 
     try {
-      const result = await fetch(
-        "http://127.0.0.1:8000/api/chat/",
+      const data = await apiRequest<ChatResponse>(
+        "/api/chat/",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+          body: {
             message: trimmed,
             language:
               i18n.resolvedLanguage ||
@@ -100,18 +99,9 @@ export default function ChatWidget() {
               "en",
             situation_slug:
               activeSituationSlug,
-          }),
+          },
         },
       );
-
-      if (!result.ok) {
-        throw new Error(
-          `Chat request failed: ${result.status}`,
-        );
-      }
-
-      const data: ChatResponse =
-        await result.json();
 
       const assistantText =
         data.reply ||
@@ -135,13 +125,17 @@ export default function ChatWidget() {
     } catch (error) {
       console.error("Chat error:", error);
 
+      const text =
+        error instanceof ApiError && error.status === 429
+          ? "You're sending messages a bit fast. Please wait a moment and try again."
+          : "I couldn't connect to the Sauti Yo service. Please try again in a moment.";
+
       setMessages((current) => [
         ...current,
         {
           id: Date.now() + 1,
           role: "assistant",
-          text:
-            "I couldn't connect to the Sauti Yo service. Please try again in a moment.",
+          text,
         },
       ]);
     } finally {

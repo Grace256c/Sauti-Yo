@@ -106,6 +106,15 @@ CSRF_TRUSTED_ORIGINS = [
     ),
 ]
 
+REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_RATES": {
+        # /api/chat/ calls a paid OpenAI model per request; this bounds
+        # cost/abuse from a single anonymous client the same way the SMS
+        # handler rate-limits per phone number.
+        "chat": "10/min",
+    },
+}
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [

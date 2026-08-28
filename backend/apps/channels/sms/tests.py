@@ -209,7 +209,7 @@ class KeywordMatchingTests(TestCase):
 
     def test_match_situation_child(self):
         self.assertEqual(
-            match_situation("my child is unsafe at school"), "child"
+            match_situation("my child is unsafe at school"), "child-abuse"
         )
 
     def test_match_situation_returns_none_for_unmatched_text(self):
