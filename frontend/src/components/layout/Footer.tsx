@@ -11,29 +11,33 @@ import {
 import footerLogo from "../../assets/branding/sauti-yo-logo-footer.png";
 
 const footerNavigation = [
-  { label: "Know Your Rights", href: "#rights" },
-  { label: "How It Works", href: "#how-it-works" },
-  { label: "Access Sauti Yo", href: "#access" },
-  { label: "Community Voice", href: "#community" },
-  { label: "Find Support", href: "#support" },
+  { label: "Know Your Rights", href: "/rights" },
+  { label: "How It Works", href: "/how-it-works" },
+  { label: "Access Sauti Yo", href: "/access" },
+  { label: "Community Voice", href: "/community" },
+  { label: "Find Support", href: "/support" },
 ];
 
 const accessChannels = [
   {
     label: "Web",
     icon: Globe2,
+    action: null,
   },
   {
     label: "USSD",
     icon: Phone,
+    action: "*384*163024#",
   },
   {
     label: "SMS",
     icon: MessageSquareText,
+    action: "18275",
   },
   {
     label: "Voice",
     icon: Headphones,
+    action: "+256 323 200 924",
   },
 ];
 
@@ -112,15 +116,15 @@ export default function Footer() {
               aria-label="Footer navigation"
             >
               {footerNavigation.map((item) => (
-                <a
+                <Link
                   key={item.href}
-                  href={item.href}
+                  to={item.href}
                   className="group inline-flex w-fit items-center gap-2 text-sm text-white/60 transition-colors duration-200 hover:text-gold"
                 >
                   <span className="h-px w-3 bg-white/25 transition-all duration-200 group-hover:w-5 group-hover:bg-gold" />
 
                   {item.label}
-                </a>
+                </Link>
               ))}
             </nav>
           </div>
@@ -150,18 +154,26 @@ export default function Footer() {
                       strokeWidth={1.8}
                     />
 
-                    <span>{channel.label}</span>
+                    <div className="min-w-0">
+                      <span className="block">{channel.label}</span>
+
+                      {channel.action && (
+                        <span className="block text-xs font-semibold text-gold">
+                          {channel.action}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
 
-            <a
-              href="#start"
+            <Link
+              to="/rights"
               className="mt-5 inline-flex min-h-11 items-center justify-center border border-gold px-5 py-2.5 text-sm font-semibold text-gold transition duration-200 hover:bg-gold hover:text-[#171717]"
             >
               Start Here
-            </a>
+            </Link>
           </div>
         </div>
       </div>
