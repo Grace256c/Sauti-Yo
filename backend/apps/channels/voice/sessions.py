@@ -6,7 +6,7 @@ def get_or_create_session(session_id, phone_number):
         session_id=session_id,
         defaults={
             "phone_number": phone_number,
-            "state": "awaiting_recording",
+            "state": "language_select",
         },
     )
 

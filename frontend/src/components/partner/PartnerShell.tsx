@@ -143,13 +143,19 @@ export default function PartnerShell() {
           to="/partner"
           className="flex min-w-0 items-center gap-3"
         >
-          <img
-            src={activeLogo}
-            alt="Sauti Yo"
-            className="h-8 w-auto object-contain"
-          />
+          <div className="flex shrink-0 flex-col items-start justify-center">
+            <img
+              src={activeLogo}
+              alt="Sauti Yo"
+              className="block h-auto w-[132px] object-contain object-left sm:w-[145px]"
+            />
 
-          <div className="h-8 w-px bg-border" />
+            <span className="mt-0.5 pl-0.5 text-[8px] font-bold uppercase leading-none tracking-[0.18em] text-gold-deep dark:text-gold">
+              Know. Act. Be Heard.
+            </span>
+          </div>
+
+          <div className="h-9 w-px bg-border" />
 
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
@@ -255,13 +261,19 @@ export default function PartnerShell() {
               to="/partner"
               className="block"
             >
-              <img
-                src={activeLogo}
-                alt="Sauti Yo"
-                className="h-10 w-auto object-contain"
-              />
+              <div className="flex flex-col items-start">
+                <img
+                  src={activeLogo}
+                  alt="Sauti Yo"
+                  className="block h-auto w-[178px] object-contain object-left"
+                />
 
-              <div className="mt-4 flex items-center gap-3">
+                <span className="mt-1 pl-0.5 text-[9px] font-bold uppercase leading-none tracking-[0.2em] text-gold-deep dark:text-gold">
+                  Know. Act. Be Heard.
+                </span>
+              </div>
+
+              <div className="mt-5 flex items-center gap-3">
                 <span className="h-px w-8 bg-gold" />
 
                 <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gold-deep dark:text-gold">

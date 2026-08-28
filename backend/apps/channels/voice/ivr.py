@@ -6,10 +6,21 @@ from xml.sax.saxutils import escape, quoteattr
 # this goes live against a real account - written here from the
 # documented verb shapes, not verified against a live sandbox call.
 
-GREETING_TEXT = (
-    "Welcome to Sauti Yo. In your own words, briefly describe what's "
-    "happening. When you're done, stay quiet for a moment, or press the "
-    "pound key."
+LANGUAGE_PROMPT = (
+    "Welcome to Sauti Yo. "
+    "Choose your language. "
+    "Press 1 for English. "
+    "Press 2 for Luganda. "
+    "Press 3 for Kiswahili. "
+    "Press 4 for Runyankole. "
+    "Press 0 to exit."
+)
+
+MAIN_MENU_PROMPT = (
+    "Main menu. "
+    "Press 1 to find your rights. "
+    "Press 2 to get help now. "
+    "Press 0 to exit."
 )
 
 SAFETY_CHECKIN_PROMPT = (
@@ -79,8 +90,146 @@ def _response(*fragments):
     )
 
 
-def build_greeting_xml():
-    return _response(_say(GREETING_TEXT), _record())
+def build_language_menu_xml():
+    return _response(_get_digits(LANGUAGE_PROMPT, num_digits=1))
+
+
+def build_main_menu_xml():
+    return _response(_get_digits(MAIN_MENU_PROMPT, num_digits=1))
+
+
+def build_rights_menu_xml(topics):
+    if not topics:
+        prompt = (
+            "No related rights are available for this situation. "
+            "Press 9 to go back. Press 0 to exit."
+        )
+        return _response(_get_digits(prompt, num_digits=1))
+
+    parts = ["Related rights."]
+
+    for number, topic in enumerate(topics, start=1):
+        parts.append(f"Press {number} for {topic.title}.")
+
+    parts.append("Press 9 to go back.")
+    parts.append("Press 0 to exit.")
+
+    return _response(_get_digits(" ".join(parts), num_digits=1))
+
+
+def build_emergency_contacts_xml(services):
+    if not services:
+        text = "No emergency contacts are available right now."
+    else:
+        parts = ["Get help now."]
+        for service in services:
+            phone = (
+                service.phone_number
+                or service.alternate_phone_number
+                or "number unavailable"
+            )
+
+            detail = service.name
+            if service.availability:
+                detail += f". Available {service.availability}"
+            detail += f". Phone {phone}."
+
+            parts.append(detail)
+
+        text = " ".join(parts)
+
+    prompt = (
+        f"{text} "
+        "Press 9 to return to the main menu. "
+        "Press 0 to exit."
+    )
+
+    return _response(_get_digits(prompt, num_digits=1))
+
+
+def build_action_steps_xml(topic):
+    steps = list(
+        topic.action_steps.filter(is_active=True).order_by("order", "id")
+    )
+
+    if not steps:
+        text = "No action steps are available for this topic."
+    else:
+        parts = ["Here are the action steps."]
+        for number, step in enumerate(steps, start=1):
+            parts.append(
+                f"Step {number}. {step.title}. {step.description}"
+            )
+        text = " ".join(parts)
+
+    prompt = (
+        f"{text} "
+        "Press 9 to go back to this right. "
+        "Press 0 to exit."
+    )
+    return _response(_get_digits(prompt, num_digits=1))
+
+
+def build_support_contacts_xml(topic):
+    services = list(
+        topic.support_services.filter(is_active=True).order_by("name")
+    )
+
+    if not services:
+        text = "No support contacts are available for this topic."
+    else:
+        parts = ["Here are the support contacts."]
+        for service in services:
+            phone = (
+                service.phone_number
+                or service.alternate_phone_number
+                or "number unavailable"
+            )
+            parts.append(f"{service.name}. Phone {phone}.")
+        text = " ".join(parts)
+
+    prompt = (
+        f"{text} "
+        "Press 9 to go back to this right. "
+        "Press 0 to exit."
+    )
+    return _response(_get_digits(prompt, num_digits=1))
+
+
+def build_topic_detail_xml(topic):
+    text = topic.summary or topic.title
+    prompt = (
+        f"{text} "
+        "Press 1 for action steps. "
+        "Press 2 for support contacts. "
+        "Press 9 to go back. "
+        "Press 0 to exit."
+    )
+    return _response(_get_digits(prompt, num_digits=1))
+
+
+def build_situation_menu_xml(situations, has_more=False):
+    if not situations:
+        prompt = (
+            "No situations are available right now. "
+            "Press 9 to go back. Press 0 to exit."
+        )
+        return _response(_get_digits(prompt, num_digits=1))
+
+    parts = ["Choose a situation."]
+
+    for number, situation in enumerate(situations, start=1):
+        parts.append(f"Press {number} for {situation.title}.")
+
+    if has_more:
+        parts.append("Press 8 for more.")
+
+    parts.append("Press 9 to go back.")
+    parts.append("Press 0 to exit.")
+
+    return _response(_get_digits(" ".join(parts), num_digits=1))
+
+
 
 
 def build_safety_checkin_xml(discreet):

@@ -8,6 +8,7 @@ from apps.channels.voice.sessions import (
     get_or_create_session,
     update_session,
 )
+from apps.rights.models import RightsTopic, Situation
 from apps.rights.services import get_situation_detail
 from apps.support.models import SupportService
 
@@ -108,6 +109,14 @@ def handle_voice_request(session_id, phone_number, is_active, dtmf_digits, recor
     ).first()
     if existing is not None:
         if existing.state in (
+            "language_select",
+            "main_menu",
+            "emergency_list",
+            "situation_list",
+            "rights_list",
+            "topic_detail",
+            "action_steps",
+            "support_contacts",
             "awaiting_safety_digit",
             "post_reply_menu",
             "awaiting_crisis_connect_digit",
@@ -135,8 +144,9 @@ def _handle_call_start(session_id, phone_number):
     if _is_rate_limited(phone_number):
         return ivr.build_closing_xml()
 
-    get_or_create_session(session_id, phone_number)
-    return ivr.build_greeting_xml()
+    session, _ = get_or_create_session(session_id, phone_number)
+    update_session(session, state="language_select", context={})
+    return ivr.build_language_menu_xml()
 
 
 def _handle_recording(session_id, phone_number, recording_url):
@@ -192,6 +202,30 @@ def _handle_unmatched(session):
 def _handle_digits(session_id, phone_number, dtmf_digits):
     session, _ = get_or_create_session(session_id, phone_number)
 
+    if session.state == "language_select":
+        return _handle_language_digit(session, dtmf_digits)
+
+    if session.state == "main_menu":
+        return _handle_main_menu_digit(session, dtmf_digits)
+
+    if session.state == "emergency_list":
+        return _handle_emergency_digit(session, dtmf_digits)
+
+    if session.state == "situation_list":
+        return _handle_situation_digit(session, dtmf_digits)
+
+    if session.state == "rights_list":
+        return _handle_rights_digit(session, dtmf_digits)
+
+    if session.state == "topic_detail":
+        return _handle_topic_digit(session, dtmf_digits)
+
+    if session.state == "action_steps":
+        return _handle_action_steps_digit(session, dtmf_digits)
+
+    if session.state == "support_contacts":
+        return _handle_support_contacts_digit(session, dtmf_digits)
+
     if session.state == "awaiting_safety_digit":
         return _handle_safety_digit(session, dtmf_digits)
 
@@ -203,6 +237,360 @@ def _handle_digits(session_id, phone_number, dtmf_digits):
 
     end_session(session)
     return ivr.build_closing_xml()
+
+
+def _handle_language_digit(session, digit):
+    languages = {
+        "1": "en",
+        "2": "lg",
+        "3": "sw",
+        "4": "nyn",
+    }
+
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    language = languages.get(digit)
+    if language is None:
+        return ivr.build_language_menu_xml()
+
+    update_session(
+        session,
+        state="main_menu",
+        context={"language": language},
+    )
+    return ivr.build_main_menu_xml()
+
+
+def _handle_main_menu_digit(session, digit):
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "1":
+        language = session.context.get("language", "en")
+        update_session(
+            session,
+            state="situation_list",
+            context={"language": language, "page": 0},
+        )
+        return _build_situation_menu(session)
+
+    if digit == "2":
+        language = session.context.get("language", "en")
+        update_session(
+            session,
+            state="emergency_list",
+            context={"language": language},
+        )
+        return _build_emergency_menu()
+
+    return ivr.build_main_menu_xml()
+
+
+def _emergency_services():
+    return list(
+        SupportService.objects.filter(
+            is_emergency_service=True,
+            is_active=True,
+        ).order_by("name")
+    )
+
+
+def _build_emergency_menu():
+    return ivr.build_emergency_contacts_xml(_emergency_services())
+
+
+def _handle_emergency_digit(session, digit):
+    language = session.context.get("language", "en")
+
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "9":
+        update_session(
+            session,
+            state="main_menu",
+            context={"language": language},
+        )
+        return ivr.build_main_menu_xml()
+
+    return _build_emergency_menu()
+
+
+VOICE_SITUATIONS_PER_PAGE = 7
+
+
+def _situation_page(session):
+    situations = list(
+        Situation.objects.filter(is_active=True).order_by("title")
+    )
+
+    start = session.context.get("page", 0)
+    shown = situations[start:start + VOICE_SITUATIONS_PER_PAGE]
+    has_more = start + VOICE_SITUATIONS_PER_PAGE < len(situations)
+
+    return shown, has_more
+
+
+def _build_situation_menu(session):
+    shown, has_more = _situation_page(session)
+    return ivr.build_situation_menu_xml(shown, has_more=has_more)
+
+
+def _handle_situation_digit(session, digit):
+    language = session.context.get("language", "en")
+    page = session.context.get("page", 0)
+    shown, has_more = _situation_page(session)
+
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "9":
+        update_session(
+            session,
+            state="main_menu",
+            context={"language": language},
+        )
+        return ivr.build_main_menu_xml()
+
+    if digit == "8" and has_more:
+        update_session(
+            session,
+            state="situation_list",
+            context={
+                "language": language,
+                "page": page + VOICE_SITUATIONS_PER_PAGE,
+            },
+        )
+        return _build_situation_menu(session)
+
+    if digit.isdigit():
+        choice = int(digit)
+        if 1 <= choice <= len(shown):
+            situation = shown[choice - 1]
+
+            topics = list(
+                RightsTopic.objects.filter(
+                    situation_links__situation=situation,
+                    is_active=True,
+                )
+                .order_by("title")
+                .distinct()[:9]
+            )
+
+            # Match the USSD behaviour: when only one related right exists,
+            # enter it directly instead of forcing another menu.
+            if len(topics) == 1:
+                topic = topics[0]
+                update_session(
+                    session,
+                    state="topic_detail",
+                    context={
+                        "language": language,
+                        "page": page,
+                        "situation_slug": situation.slug,
+                        "topic_slug": topic.slug,
+                    },
+                )
+                return ivr.build_topic_detail_xml(topic)
+
+            update_session(
+                session,
+                state="rights_list",
+                context={
+                    "language": language,
+                    "page": page,
+                    "situation_slug": situation.slug,
+                },
+            )
+            return ivr.build_rights_menu_xml(topics)
+
+    return _build_situation_menu(session)
+
+
+def _topics_for_voice_situation(situation_slug):
+    return list(
+        RightsTopic.objects.filter(
+            situation_links__situation__slug=situation_slug,
+            situation_links__situation__is_active=True,
+            is_active=True,
+        )
+        .order_by("title")
+        .distinct()[:9]
+    )
+
+
+def _handle_rights_digit(session, digit):
+    language = session.context.get("language", "en")
+    situation_slug = session.context.get("situation_slug")
+    page = session.context.get("page", 0)
+    topics = _topics_for_voice_situation(situation_slug)
+
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "9":
+        update_session(
+            session,
+            state="situation_list",
+            context={"language": language, "page": page},
+        )
+        return _build_situation_menu(session)
+
+    if digit.isdigit():
+        choice = int(digit)
+        if 1 <= choice <= len(topics):
+            topic = topics[choice - 1]
+            update_session(
+                session,
+                state="topic_detail",
+                context={
+                    "language": language,
+                    "page": page,
+                    "situation_slug": situation_slug,
+                    "topic_slug": topic.slug,
+                },
+            )
+            return ivr.build_topic_detail_xml(topic)
+
+    return ivr.build_rights_menu_xml(topics)
+
+
+def _handle_topic_digit(session, digit):
+    language = session.context.get("language", "en")
+    situation_slug = session.context.get("situation_slug")
+    topic_slug = session.context.get("topic_slug")
+    page = session.context.get("page", 0)
+
+    topic = RightsTopic.objects.filter(
+        slug=topic_slug,
+        is_active=True,
+    ).first()
+
+    if topic is None:
+        update_session(
+            session,
+            state="situation_list",
+            context={"language": language, "page": page},
+        )
+        return _build_situation_menu(session)
+
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "9":
+        topics = _topics_for_voice_situation(situation_slug)
+
+        if len(topics) <= 1:
+            update_session(
+                session,
+                state="situation_list",
+                context={"language": language, "page": page},
+            )
+            return _build_situation_menu(session)
+
+        update_session(
+            session,
+            state="rights_list",
+            context={
+                "language": language,
+                "page": page,
+                "situation_slug": situation_slug,
+            },
+        )
+        return ivr.build_rights_menu_xml(topics)
+
+    if digit == "1":
+        update_session(
+            session,
+            state="action_steps",
+            context={
+                "language": language,
+                "page": page,
+                "situation_slug": situation_slug,
+                "topic_slug": topic_slug,
+            },
+        )
+        return ivr.build_action_steps_xml(topic)
+
+    if digit == "2":
+        update_session(
+            session,
+            state="support_contacts",
+            context={
+                "language": language,
+                "page": page,
+                "situation_slug": situation_slug,
+                "topic_slug": topic_slug,
+            },
+        )
+        return ivr.build_support_contacts_xml(topic)
+
+    return ivr.build_topic_detail_xml(topic)
+
+
+def _topic_from_voice_session(session):
+    return RightsTopic.objects.filter(
+        slug=session.context.get("topic_slug"),
+        is_active=True,
+    ).first()
+
+
+def _return_to_voice_topic(session):
+    topic = _topic_from_voice_session(session)
+
+    if topic is None:
+        language = session.context.get("language", "en")
+        page = session.context.get("page", 0)
+        update_session(
+            session,
+            state="situation_list",
+            context={"language": language, "page": page},
+        )
+        return _build_situation_menu(session)
+
+    update_session(
+        session,
+        state="topic_detail",
+        context=dict(session.context),
+    )
+    return ivr.build_topic_detail_xml(topic)
+
+
+def _handle_action_steps_digit(session, digit):
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "9":
+        return _return_to_voice_topic(session)
+
+    topic = _topic_from_voice_session(session)
+    if topic is None:
+        return _return_to_voice_topic(session)
+
+    return ivr.build_action_steps_xml(topic)
+
+
+def _handle_support_contacts_digit(session, digit):
+    if digit == "0":
+        end_session(session)
+        return ivr.build_closing_xml()
+
+    if digit == "9":
+        return _return_to_voice_topic(session)
+
+    topic = _topic_from_voice_session(session)
+    if topic is None:
+        return _return_to_voice_topic(session)
+
+    return ivr.build_support_contacts_xml(topic)
 
 
 def _handle_safety_digit(session, digit):

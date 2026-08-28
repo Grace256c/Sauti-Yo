@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 from datetime import timedelta
 
 from django.core.cache import cache
@@ -15,6 +16,11 @@ MAX_SMS_LENGTH = templates.SMS_SEGMENT_BUDGET * 2
 
 RATE_LIMIT_MAX_MESSAGES = 5
 RATE_LIMIT_WINDOW_SECONDS = 60
+
+_sms_reply_context = ContextVar(
+    "sms_reply_context",
+    default=None,
+)
 
 
 def _is_rate_limited(phone_number):
@@ -35,7 +41,15 @@ def _is_rate_limited(phone_number):
 def _send(phone_number, message):
     if len(message) > MAX_SMS_LENGTH:
         message = message[: MAX_SMS_LENGTH - 3].rstrip() + "..."
-    send_sms(phone_number, message)
+
+    reply_context = _sms_reply_context.get() or {}
+
+    send_sms(
+        phone_number,
+        message,
+        short_code=reply_context.get("short_code"),
+        link_id=reply_context.get("link_id"),
+    )
 
 
 def _compose_situation_reply(detail, mode, language="en"):
@@ -232,7 +246,26 @@ def _handle_referral_step(phone_number, context, text):
         _send(phone_number, templates.build_support_reply(detail, mode))
 
 
-def handle_sms_request(phone_number, text):
+def handle_sms_request(
+    phone_number,
+    text,
+    short_code=None,
+    link_id=None,
+):
+    token = _sms_reply_context.set(
+        {
+            "short_code": short_code,
+            "link_id": link_id,
+        }
+    )
+
+    try:
+        return _handle_sms_request(phone_number, text)
+    finally:
+        _sms_reply_context.reset(token)
+
+
+def _handle_sms_request(phone_number, text):
     if _is_rate_limited(phone_number):
         return
 

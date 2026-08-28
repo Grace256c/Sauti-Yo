@@ -76,20 +76,22 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-surface/95 shadow-[0_4px_20px_rgba(0,0,0,0.04)] backdrop-blur-md">
-      <div className="site-container flex min-h-[74px] items-center justify-between gap-4">
-        {/* Logo */}
+      <div className="site-container flex min-h-[82px] items-center justify-between gap-3 xl:min-h-[86px] xl:gap-4">
+        {/* Sauti Yo brand */}
         <Link
           to="/"
-          aria-label="Sauti Yo home"
-          className="flex min-w-0 shrink-0 items-center"
+          aria-label="Sauti Yo — Know. Act. Be Heard. — home"
+          className="group flex min-w-0 shrink-0 flex-col items-start justify-center"
         >
-          <div className="flex h-[54px] w-[150px] items-center overflow-hidden sm:w-[165px] xl:w-[178px]">
-            <img
-              src={darkMode ? logoLight : logo}
-              alt="Sauti Yo"
-              className="max-h-[48px] w-full object-contain object-left"
-            />
-          </div>
+          <img
+            src={darkMode ? logoLight : logo}
+            alt="Sauti Yo"
+            className="block h-auto w-[150px] object-contain object-left sm:w-[165px] lg:w-[160px] xl:w-[178px]"
+          />
+
+          <span className="mt-0.5 pl-1 text-[9px] font-bold uppercase leading-none tracking-[0.22em] text-gold-deep transition-colors group-hover:text-gold dark:text-gold sm:text-[10px]">
+            Know. Act. Be Heard.
+          </span>
         </Link>
 
         {/* Desktop navigation */}
