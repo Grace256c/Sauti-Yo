@@ -39,6 +39,11 @@ export default function ChatWidget() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [
+    activeSituationSlug,
+    setActiveSituationSlug,
+  ] = useState<string | null>(null);
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -93,6 +98,8 @@ export default function ChatWidget() {
               i18n.resolvedLanguage ||
               i18n.language ||
               "en",
+            situation_slug:
+              activeSituationSlug,
           }),
         },
       );
@@ -110,6 +117,12 @@ export default function ChatWidget() {
         data.reply ||
         data.message ||
         "I couldn't find an answer for that. Please try describing the situation in another way.";
+
+      if (data.situation?.slug) {
+        setActiveSituationSlug(
+          data.situation.slug,
+        );
+      }
 
       setMessages((current) => [
         ...current,
