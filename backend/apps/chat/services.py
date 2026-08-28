@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from openai import OpenAI
 
@@ -7,6 +9,8 @@ from apps.legal_knowledge.services import (
     search_legal_sections,
 )
 from apps.rights.services import get_situation_detail
+
+logger = logging.getLogger(__name__)
 
 
 SLUG_ALIASES = {
@@ -249,11 +253,8 @@ SAUTI YO PRACTICAL GUIDANCE:
 
         return reply
 
-    except Exception as exc:
-        print(
-            "OPENAI CHAT ERROR:",
-            repr(exc),
-        )
+    except Exception:
+        logger.warning("OpenAI chat reply generation failed", exc_info=True)
         return None
 
 

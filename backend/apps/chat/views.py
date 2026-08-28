@@ -15,7 +15,12 @@ class ChatAPIView(APIView):
 
     def post(self, request):
         message = request.data.get("message", "")
+        if not isinstance(message, str):
+            message = ""
+
         language = request.data.get("language", "en")
+        if not isinstance(language, str):
+            language = "en"
 
         result = build_chat_response(
             message=message,
