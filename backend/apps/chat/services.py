@@ -448,6 +448,67 @@ SAUTI YO PRACTICAL GUIDANCE:
         logger.warning("OpenAI chat reply generation failed", exc_info=True)
         return None
 
+CONVERSATIONAL_MESSAGES = {
+    "hi",
+    "hello",
+    "hey",
+    "hii",
+    "hiii",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "can you help me",
+    "can u help me",
+    "help me",
+    "thanks",
+    "thank you",
+    "okay",
+    "ok",
+}
+
+
+def get_conversational_reply(message, language="en"):
+    """
+    Handle greetings and simple conversational messages without
+    sending them through legal-information retrieval.
+    """
+    normalized = " ".join(
+        (message or "").lower().strip().split()
+    )
+
+    if normalized not in CONVERSATIONAL_MESSAGES:
+        return None
+
+    replies = {
+        "en": (
+            "Hello! I'm the Sauti Yo Assistant. "
+            "Tell me what's happening in your own words, and I'll help "
+            "you understand the available rights information, possible "
+            "next steps, and where you may find support."
+        ),
+        "lg": (
+            "Gyebale ko! Nze Sauti Yo Assistant. "
+            "Mbuulira ekikutuuseeko mu bigambo byo, nkuyambe "
+            "okutegeera amawulire agakwata ku ddembe lyo n'emitendera "
+            "gy'osobola okuddako."
+        ),
+        "sw": (
+            "Habari! Mimi ni Msaidizi wa Sauti Yo. "
+            "Niambie kinachoendelea kwa maneno yako, nami nitakusaidia "
+            "kuelewa taarifa za haki zako, hatua unazoweza kuchukua, "
+            "na mahali unapoweza kupata msaada."
+        ),
+        "nyn": (
+            "Agandi! Ndi Sauti Yo Assistant. "
+            "Mbagambira ekirikubaho omu bigambo byawe, nkuyambe "
+            "kumanya amakuru agarikukwata aha burenganzira bwawe "
+            "n'emitendera ei osobora kukuratira."
+        ),
+    }
+
+    return replies.get(language, replies["en"])
+
+
 
 def build_chat_response(
     message,
@@ -468,7 +529,18 @@ def build_chat_response(
             ),
             "situation": None,
         }
+    # Handle greetings and simple conversational messages first.
+    conversational_reply = get_conversational_reply(
+        message,
+        language,
+    )
 
+    if conversational_reply:
+        return {
+            "matched": True,
+            "reply": conversational_reply,
+            "situation": None,
+        }
     # First try to identify a situation from the current
     # message. A newly identified situation always takes
     # priority over previous conversation context.
