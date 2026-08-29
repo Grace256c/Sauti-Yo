@@ -720,6 +720,8 @@ Example:
 ALLOWED_HOSTS=localhost,127.0.0.1,your-public-host.example
 ```
 
+When `DEBUG=True`, `*.ngrok-free.dev`, `*.ngrok-free.app`, `*.ngrok.app`, `*.ngrok.io` and `*.trycloudflare.com` hostnames are allowed automatically, so ngrok/Cloudflare tunnels work without editing `ALLOWED_HOSTS` on every restart. Manually adding a hostname is only needed for other tunnel providers or custom domains.
+
 **Never commit real API keys, credentials or passwords.**
 
 ---
