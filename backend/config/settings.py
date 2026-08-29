@@ -39,6 +39,17 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+if DEBUG:
+    # Tunnel hostnames (ngrok, Cloudflare) rotate on every restart, so
+    # ALLOWED_HOSTS can't pin them exactly. A leading dot matches any subdomain.
+    ALLOWED_HOSTS += [
+        ".ngrok-free.dev",
+        ".ngrok-free.app",
+        ".ngrok.app",
+        ".ngrok.io",
+        ".trycloudflare.com",
+    ]
+
 # Africa's Talking
 AFRICASTALKING_USERNAME = os.getenv("AFRICASTALKING_USERNAME") or "sandbox"
 AFRICASTALKING_API_KEY = os.getenv("AFRICASTALKING_API_KEY", "")
