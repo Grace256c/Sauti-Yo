@@ -9,6 +9,7 @@ from apps.legal_knowledge.services import (
     search_legal_sections,
 )
 from apps.rights.services import get_situation_detail
+from apps.rights.rag.vector_store import search_legal_sources
 
 logger = logging.getLogger(__name__)
 
