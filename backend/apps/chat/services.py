@@ -759,11 +759,22 @@ def build_chat_response(
     # The AI also searches the Constitution independently,
     # so a RightsTopic match is NOT required for the
     # chatbot to answer a constitutional question.
-    ai_reply = generate_ai_reply(
+    ai_result = generate_ai_reply(
         message=message,
         detail=detail,
         language=language,
     )
+
+    ai_reply = None
+    sources = []
+
+    if ai_result:
+        if isinstance(ai_result, dict):
+            ai_reply = ai_result.get("reply")
+            sources = ai_result.get("sources") or []
+        else:
+            # Preserve compatibility with mocked/legacy callers.
+            ai_reply = ai_result
 
     if ai_reply:
         return {
