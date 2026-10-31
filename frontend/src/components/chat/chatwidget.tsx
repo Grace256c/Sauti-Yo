@@ -17,16 +17,28 @@ import {
 
 import { apiRequest, ApiError } from "../../services/api";
 
+type LegalSource = {
+  title: string;
+  version_date?: string | null;
+  jurisdiction?: string | null;
+  category?: string | null;
+  pages: number[];
+};
+
 type Message = {
   id: number;
   role: "user" | "assistant";
   text: string;
+  sources?: LegalSource[];
+  hasVerifiedSources?: boolean;
 };
 
 type ChatResponse = {
   matched: boolean;
   reply?: string;
   message?: string;
+  sources?: LegalSource[];
+  has_verified_sources?: boolean;
   situation?: {
     slug: string;
     title: string;
@@ -120,6 +132,9 @@ export default function ChatWidget() {
           id: Date.now() + 1,
           role: "assistant",
           text: assistantText,
+          sources: data.sources ?? [],
+          hasVerifiedSources:
+            data.has_verified_sources ?? false,
         },
       ]);
     } catch (error) {
