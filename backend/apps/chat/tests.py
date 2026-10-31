@@ -242,8 +242,9 @@ class GenerateAiReplyTests(TestCase):
         services._client = self.mock_client
 
         self.semantic_retrieval_patcher = patch(
-            "apps.chat.services.retrieve_semantic_legal_context",
-            return_value=(
+            "apps.chat.services.retrieve_semantic_legal_evidence",
+            return_value={
+                "context": (
                 "[Verified legal source 1]\n"
                 "Law: Test Legal Source\n"
                 "Version: 2026-01-01\n"
@@ -251,7 +252,17 @@ class GenerateAiReplyTests(TestCase):
                 "Category: test\n"
                 "Legal text:\n"
                 "Verified test legal passage."
-            ),
+                ),
+                "sources": [
+                    {
+                        "title": "Test Legal Source",
+                        "version_date": "2026-01-01",
+                        "jurisdiction": "Uganda",
+                        "category": "test",
+                        "pages": [1],
+                    }
+                ],
+            },
         )
         self.mock_semantic_retrieval = (
             self.semantic_retrieval_patcher.start()
@@ -267,7 +278,14 @@ class GenerateAiReplyTests(TestCase):
         )
         result = services.generate_ai_reply("what are my rights", None)
 
-        self.assertEqual(result, "Here is what you should know.")
+        self.assertEqual(
+            result["reply"],
+            "Here is what you should know.",
+        )
+        self.assertEqual(
+            result["sources"][0]["title"],
+            "Test Legal Source",
+        )
         self.mock_semantic_retrieval.assert_called_once_with(
             "what are my rights",
             k=5,

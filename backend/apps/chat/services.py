@@ -495,10 +495,12 @@ def generate_ai_reply(
 
     # Retrieve semantically relevant passages from verified
     # primary-law PDFs. Failure here does not interrupt chat.
-    semantic_legal_context = retrieve_semantic_legal_context(
+    semantic_evidence = retrieve_semantic_legal_evidence(
         message,
         k=5,
     )
+    semantic_legal_context = semantic_evidence["context"]
+    semantic_sources = semantic_evidence["sources"]
 
     # Preserve the existing structured legal knowledge base.
     legal_sections = search_legal_sections(
@@ -630,7 +632,10 @@ IMPORTANT RULES:
         if not reply:
             return None
 
-        return reply
+        return {
+            "reply": reply,
+            "sources": semantic_sources,
+        }
 
     except Exception:
         logger.warning("OpenAI chat reply generation failed", exc_info=True)
