@@ -182,7 +182,24 @@ class GenerateAiReplyTests(TestCase):
         self.mock_client = MagicMock()
         services._client = self.mock_client
 
+        self.semantic_retrieval_patcher = patch(
+            "apps.chat.services.retrieve_semantic_legal_context",
+            return_value=(
+                "[Verified legal source 1]\n"
+                "Law: Test Legal Source\n"
+                "Version: 2026-01-01\n"
+                "PDF page: 1\n"
+                "Category: test\n"
+                "Legal text:\n"
+                "Verified test legal passage."
+            ),
+        )
+        self.mock_semantic_retrieval = (
+            self.semantic_retrieval_patcher.start()
+        )
+
     def tearDown(self):
+        self.semantic_retrieval_patcher.stop()
         services._client = None
 
     def test_returns_stripped_reply_text(self):
@@ -190,7 +207,12 @@ class GenerateAiReplyTests(TestCase):
             "  Here is what you should know.  "
         )
         result = services.generate_ai_reply("what are my rights", None)
+
         self.assertEqual(result, "Here is what you should know.")
+        self.mock_semantic_retrieval.assert_called_once_with(
+            "what are my rights",
+            k=5,
+        )
 
     def test_returns_none_when_reply_is_empty(self):
         self.mock_client.responses.create.return_value.output_text = "   "
