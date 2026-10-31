@@ -635,6 +635,7 @@ IMPORTANT RULES:
         return {
             "reply": reply,
             "sources": semantic_sources,
+            "has_verified_sources": bool(semantic_sources),
         }
 
     except Exception:
