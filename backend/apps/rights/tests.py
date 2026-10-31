@@ -538,3 +538,57 @@ class LegalRetrievalTests(TestCase):
             "dismissed without a hearing",
             k=2,
         )
+
+
+
+class LegalRetrievalWithoutNeighborsTests(TestCase):
+    """Coverage for semantic retrieval without page expansion."""
+
+    def test_neighbor_pages_are_not_loaded_when_disabled(self):
+        from unittest.mock import Mock, patch
+
+        from langchain_core.documents import Document
+
+        from apps.rights.rag.vector_store import search_legal_sources
+
+        strongest = Document(
+            page_content="Section 65 hearing before dismissal.",
+            metadata={
+                "filename": "employment.pdf",
+                "page": 34,
+            },
+        )
+        secondary = Document(
+            page_content="Section 69 summary dismissal.",
+            metadata={
+                "filename": "employment.pdf",
+                "page": 37,
+            },
+        )
+
+        vector_store = Mock()
+        vector_store.similarity_search.return_value = [
+            strongest,
+            secondary,
+        ]
+
+        with (
+            patch(
+                "apps.rights.rag.vector_store.load_vector_store",
+                return_value=vector_store,
+            ),
+            patch(
+                "apps.rights.rag.vector_store._load_neighboring_pages",
+            ) as load_neighbors,
+        ):
+            documents = search_legal_sources(
+                "dismissed without a hearing",
+                k=2,
+                include_neighbors=False,
+            )
+
+        self.assertEqual(
+            [document.metadata["page"] for document in documents],
+            [34, 37],
+        )
+        load_neighbors.assert_not_called()
