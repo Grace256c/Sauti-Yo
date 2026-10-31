@@ -108,23 +108,22 @@ def build_semantic_legal_context(documents) -> str:
     return "\n\n".join(passages)
 
 
-def retrieve_semantic_legal_context(
+def retrieve_semantic_legal_evidence(
     query: str,
     *,
     k: int = 5,
-) -> str:
-    """Retrieve verified semantic legal context without breaking chat fallback.
-
-    Semantic retrieval improves legal grounding, but it is an enhancement to
-    the existing Sauti Yo verified-data flow. If the vector store, embeddings,
-    or retrieval service is unavailable, the chat can continue using its
-    existing structured legal and practical guidance.
-    """
+) -> dict:
+    """Retrieve verified legal context and public source metadata."""
 
     query = (query or "").strip()
 
+    empty_result = {
+        "context": "",
+        "sources": [],
+    }
+
     if not query:
-        return ""
+        return empty_result
 
     try:
         documents = search_legal_sources(
@@ -138,9 +137,25 @@ def retrieve_semantic_legal_context(
             "continuing with existing verified guidance.",
             exc_info=True,
         )
-        return ""
+        return empty_result
 
-    return build_semantic_legal_context(documents)
+    return {
+        "context": build_semantic_legal_context(documents),
+        "sources": build_semantic_legal_sources(documents),
+    }
+
+
+def retrieve_semantic_legal_context(
+    query: str,
+    *,
+    k: int = 5,
+) -> str:
+    """Return semantic legal context for backwards compatibility."""
+
+    return retrieve_semantic_legal_evidence(
+        query,
+        k=k,
+    )["context"]
 
 
 SLUG_ALIASES = {
