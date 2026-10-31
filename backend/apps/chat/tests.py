@@ -368,6 +368,50 @@ class BuildChatResponseTests(TestCase):
         )
 
 
+    @patch("apps.chat.services.generate_ai_reply")
+    @patch("apps.chat.services.find_situation")
+    def test_ai_reply_exposes_verified_sources(
+        self,
+        mock_find,
+        mock_generate,
+    ):
+        mock_find.return_value = {
+            "slug": "work-employment",
+            "title": "Work and employment",
+            "risk_level": "standard",
+        }
+
+        mock_generate.return_value = {
+            "reply": "You may have employment protections.",
+            "sources": [
+                {
+                    "title": "Employment Act, Chapter 226",
+                    "version_date": "2026-06-05",
+                    "jurisdiction": "Uganda",
+                    "category": "employment_rights",
+                    "pages": [34, 35],
+                }
+            ],
+        }
+
+        result = services.build_chat_response(
+            "My employer dismissed me without hearing me."
+        )
+
+        self.assertEqual(
+            result["reply"],
+            "You may have employment protections.",
+        )
+        self.assertEqual(
+            result["sources"][0]["title"],
+            "Employment Act, Chapter 226",
+        )
+        self.assertEqual(
+            result["sources"][0]["pages"],
+            [34, 35],
+        )
+
+
 class ChatAPIViewTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -380,6 +424,7 @@ class ChatAPIViewTests(TestCase):
         mock_build.return_value = {
             "matched": False,
             "reply": "hi",
+            "sources": [],
             "situation": None,
         }
         response = self.client.post(
@@ -405,6 +450,7 @@ class ChatAPIViewTests(TestCase):
         mock_build.return_value = {
             "matched": False,
             "reply": "hi",
+            "sources": [],
             "situation": None,
         }
         self.client.post(
@@ -419,6 +465,7 @@ class ChatAPIViewTests(TestCase):
         mock_build.return_value = {
             "matched": False,
             "reply": "hi",
+            "sources": [],
             "situation": None,
         }
         statuses = []
