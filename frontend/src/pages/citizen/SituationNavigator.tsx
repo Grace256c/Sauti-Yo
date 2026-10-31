@@ -22,6 +22,14 @@ import {
   analyseRightsConcern,
 } from "../../services/rights";
 
+import {
+  getLegalGuidance,
+} from "../../services/legalGuidance";
+
+import type {
+  LegalGuidanceResponse,
+} from "../../services/legalGuidance";
+
 import type {
   ConcernAnalysisResponse,
 } from "../../services/rights";
@@ -33,6 +41,8 @@ export default function SituationNavigator() {
     useState<ConcernAnalysisResponse | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const [error, setError] = useState("");
+  const [legalGuidance, setLegalGuidance] =
+    useState<LegalGuidanceResponse | null>(null);
 
   const handleAnalyse = async (
     event: FormEvent<HTMLFormElement>,
@@ -51,12 +61,33 @@ export default function SituationNavigator() {
 
     setAnalysing(true);
     setError("");
+    setLegalGuidance(null);
 
     try {
       const response =
         await analyseRightsConcern(cleanedConcern);
 
       setResult(response);
+
+      if (response.matched && response.situation?.slug) {
+        try {
+          const guidance = await getLegalGuidance(
+            cleanedConcern,
+            response.situation.slug,
+          );
+
+          setLegalGuidance(guidance);
+        } catch (guidanceError) {
+          console.error(
+            "Source-grounded guidance error:",
+            guidanceError,
+          );
+
+          // The deterministic Rights Navigator remains usable
+          // even when the optional RAG explanation is unavailable.
+          setLegalGuidance(null);
+        }
+      }
     } catch {
       setResult(null);
       setError(
@@ -70,6 +101,7 @@ export default function SituationNavigator() {
   const handleResetAnalysis = () => {
     setConcern("");
     setResult(null);
+    setLegalGuidance(null);
     setError("");
 
     window.scrollTo({
