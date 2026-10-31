@@ -304,7 +304,56 @@ export default function ChatWidget() {
                       `
                   }
                 >
-                  {message.text}
+                  <div>{message.text}</div>
+
+                  {message.role === "assistant" &&
+                    message.hasVerifiedSources &&
+                    message.sources &&
+                    message.sources.length > 0 && (
+                      <div className="mt-3 border-t border-border pt-3">
+                        <p className="mb-2 text-xs font-semibold text-text-primary">
+                          Verified legal sources
+                        </p>
+
+                        <div className="space-y-2">
+                          {message.sources.map(
+                            (source, index) => {
+                              const version =
+                                formatSourceDate(
+                                  source.version_date,
+                                );
+                              const pages =
+                                formatSourcePages(
+                                  source.pages,
+                                );
+
+                              return (
+                                <div
+                                  key={`${source.title}-${index}`}
+                                  className="rounded-lg bg-background/70 px-3 py-2"
+                                >
+                                  <p className="text-xs font-medium text-text-primary">
+                                    {source.title}
+                                  </p>
+
+                                  <p className="mt-1 text-[11px] leading-4 text-text-secondary">
+                                    {[
+                                      source.jurisdiction,
+                                      version
+                                        ? `Version ${version}`
+                                        : null,
+                                      pages,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </p>
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                    )}
                 </div>
               </div>
             ))}
