@@ -311,9 +311,15 @@ export default function ChatWidget() {
                     message.sources &&
                     message.sources.length > 0 && (
                       <div className="mt-3 border-t border-border pt-3">
-                        <p className="mb-2 text-xs font-semibold text-text-primary">
-                          Verified legal sources
-                        </p>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-text-primary">
+                            Verified legal sources
+                          </p>
+
+                          <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-semibold text-gold-deep">
+                            Source-backed
+                          </span>
+                        </div>
 
                         <div className="space-y-2">
                           {message.sources.map(
@@ -352,6 +358,11 @@ export default function ChatWidget() {
                             },
                           )}
                         </div>
+
+                        <p className="mt-2 text-[10px] leading-4 text-text-secondary">
+                          Sauti Yo provides legal information and practical guidance,
+                          not legal representation or personalised legal advice.
+                        </p>
                       </div>
                     )}
                 </div>
