@@ -14,6 +14,63 @@ from apps.rights.rag.vector_store import search_legal_sources
 logger = logging.getLogger(__name__)
 
 
+def build_semantic_legal_sources(documents) -> list[dict]:
+    """Build deterministic public source metadata from RAG documents."""
+
+    grouped = {}
+
+    for document in documents or []:
+        metadata = document.metadata
+
+        if not metadata.get("verified"):
+            continue
+
+        title = metadata.get("title")
+        version_date = metadata.get("version_date")
+        page = metadata.get("page")
+        jurisdiction = metadata.get("jurisdiction")
+        category = metadata.get("category")
+
+        if not title:
+            continue
+
+        key = (
+            title,
+            version_date,
+            jurisdiction,
+            category,
+        )
+
+        source = grouped.setdefault(
+            key,
+            {
+                "title": title,
+                "version_date": version_date,
+                "jurisdiction": jurisdiction,
+                "category": category,
+                "pages": set(),
+            },
+        )
+
+        if isinstance(page, int):
+            source["pages"].add(page)
+
+    sources = []
+
+    for source in grouped.values():
+        sources.append(
+            {
+                "title": source["title"],
+                "version_date": source["version_date"],
+                "jurisdiction": source["jurisdiction"],
+                "category": source["category"],
+                "pages": sorted(source["pages"]),
+            }
+        )
+
+    return sources
+
+
 def build_semantic_legal_context(documents) -> str:
     """Format verified RAG documents for grounded chat generation.
 

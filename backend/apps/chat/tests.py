@@ -177,6 +177,65 @@ class GenerateAiReplyMissingKeyTests(TestCase):
         self.assertIsNone(result)
 
 
+class SemanticLegalSourceTests(TestCase):
+    def test_groups_verified_source_pages(self):
+        first = MagicMock()
+        first.metadata = {
+            "title": "Employment Act, Chapter 226",
+            "version_date": "2026-06-05",
+            "jurisdiction": "Uganda",
+            "category": "employment_rights",
+            "page": 35,
+            "verified": True,
+        }
+
+        second = MagicMock()
+        second.metadata = {
+            "title": "Employment Act, Chapter 226",
+            "version_date": "2026-06-05",
+            "jurisdiction": "Uganda",
+            "category": "employment_rights",
+            "page": 34,
+            "verified": True,
+        }
+
+        duplicate = MagicMock()
+        duplicate.metadata = dict(second.metadata)
+
+        sources = services.build_semantic_legal_sources(
+            [first, second, duplicate]
+        )
+
+        self.assertEqual(
+            sources,
+            [
+                {
+                    "title": "Employment Act, Chapter 226",
+                    "version_date": "2026-06-05",
+                    "jurisdiction": "Uganda",
+                    "category": "employment_rights",
+                    "pages": [34, 35],
+                }
+            ],
+        )
+
+    def test_excludes_unverified_documents(self):
+        document = MagicMock()
+        document.metadata = {
+            "title": "Unverified Source",
+            "version_date": "2026-01-01",
+            "jurisdiction": "Uganda",
+            "category": "test",
+            "page": 1,
+            "verified": False,
+        }
+
+        self.assertEqual(
+            services.build_semantic_legal_sources([document]),
+            [],
+        )
+
+
 class GenerateAiReplyTests(TestCase):
     def setUp(self):
         self.mock_client = MagicMock()
