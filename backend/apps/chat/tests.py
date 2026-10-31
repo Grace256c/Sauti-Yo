@@ -177,12 +177,99 @@ class GenerateAiReplyMissingKeyTests(TestCase):
         self.assertIsNone(result)
 
 
+class SemanticLegalSourceTests(TestCase):
+    def test_groups_verified_source_pages(self):
+        first = MagicMock()
+        first.metadata = {
+            "title": "Employment Act, Chapter 226",
+            "version_date": "2026-06-05",
+            "jurisdiction": "Uganda",
+            "category": "employment_rights",
+            "page": 35,
+            "verified": True,
+        }
+
+        second = MagicMock()
+        second.metadata = {
+            "title": "Employment Act, Chapter 226",
+            "version_date": "2026-06-05",
+            "jurisdiction": "Uganda",
+            "category": "employment_rights",
+            "page": 34,
+            "verified": True,
+        }
+
+        duplicate = MagicMock()
+        duplicate.metadata = dict(second.metadata)
+
+        sources = services.build_semantic_legal_sources(
+            [first, second, duplicate]
+        )
+
+        self.assertEqual(
+            sources,
+            [
+                {
+                    "title": "Employment Act, Chapter 226",
+                    "version_date": "2026-06-05",
+                    "jurisdiction": "Uganda",
+                    "category": "employment_rights",
+                    "pages": [34, 35],
+                }
+            ],
+        )
+
+    def test_excludes_unverified_documents(self):
+        document = MagicMock()
+        document.metadata = {
+            "title": "Unverified Source",
+            "version_date": "2026-01-01",
+            "jurisdiction": "Uganda",
+            "category": "test",
+            "page": 1,
+            "verified": False,
+        }
+
+        self.assertEqual(
+            services.build_semantic_legal_sources([document]),
+            [],
+        )
+
+
 class GenerateAiReplyTests(TestCase):
     def setUp(self):
         self.mock_client = MagicMock()
         services._client = self.mock_client
 
+        self.semantic_retrieval_patcher = patch(
+            "apps.chat.services.retrieve_semantic_legal_evidence",
+            return_value={
+                "context": (
+                "[Verified legal source 1]\n"
+                "Law: Test Legal Source\n"
+                "Version: 2026-01-01\n"
+                "PDF page: 1\n"
+                "Category: test\n"
+                "Legal text:\n"
+                "Verified test legal passage."
+                ),
+                "sources": [
+                    {
+                        "title": "Test Legal Source",
+                        "version_date": "2026-01-01",
+                        "jurisdiction": "Uganda",
+                        "category": "test",
+                        "pages": [1],
+                    }
+                ],
+            },
+        )
+        self.mock_semantic_retrieval = (
+            self.semantic_retrieval_patcher.start()
+        )
+
     def tearDown(self):
+        self.semantic_retrieval_patcher.stop()
         services._client = None
 
     def test_returns_stripped_reply_text(self):
@@ -190,7 +277,19 @@ class GenerateAiReplyTests(TestCase):
             "  Here is what you should know.  "
         )
         result = services.generate_ai_reply("what are my rights", None)
-        self.assertEqual(result, "Here is what you should know.")
+
+        self.assertEqual(
+            result["reply"],
+            "Here is what you should know.",
+        )
+        self.assertEqual(
+            result["sources"][0]["title"],
+            "Test Legal Source",
+        )
+        self.mock_semantic_retrieval.assert_called_once_with(
+            "what are my rights",
+            k=5,
+        )
 
     def test_returns_none_when_reply_is_empty(self):
         self.mock_client.responses.create.return_value.output_text = "   "
@@ -269,6 +368,50 @@ class BuildChatResponseTests(TestCase):
         )
 
 
+    @patch("apps.chat.services.generate_ai_reply")
+    @patch("apps.chat.services.find_situation")
+    def test_ai_reply_exposes_verified_sources(
+        self,
+        mock_find,
+        mock_generate,
+    ):
+        mock_find.return_value = {
+            "slug": "work-employment",
+            "title": "Work and employment",
+            "risk_level": "standard",
+        }
+
+        mock_generate.return_value = {
+            "reply": "You may have employment protections.",
+            "sources": [
+                {
+                    "title": "Employment Act, Chapter 226",
+                    "version_date": "2026-06-05",
+                    "jurisdiction": "Uganda",
+                    "category": "employment_rights",
+                    "pages": [34, 35],
+                }
+            ],
+        }
+
+        result = services.build_chat_response(
+            "My employer dismissed me without hearing me."
+        )
+
+        self.assertEqual(
+            result["reply"],
+            "You may have employment protections.",
+        )
+        self.assertEqual(
+            result["sources"][0]["title"],
+            "Employment Act, Chapter 226",
+        )
+        self.assertEqual(
+            result["sources"][0]["pages"],
+            [34, 35],
+        )
+
+
 class ChatAPIViewTests(TestCase):
     def setUp(self):
         cache.clear()
@@ -281,6 +424,7 @@ class ChatAPIViewTests(TestCase):
         mock_build.return_value = {
             "matched": False,
             "reply": "hi",
+            "sources": [],
             "situation": None,
         }
         response = self.client.post(
@@ -306,6 +450,7 @@ class ChatAPIViewTests(TestCase):
         mock_build.return_value = {
             "matched": False,
             "reply": "hi",
+            "sources": [],
             "situation": None,
         }
         self.client.post(
@@ -320,6 +465,7 @@ class ChatAPIViewTests(TestCase):
         mock_build.return_value = {
             "matched": False,
             "reply": "hi",
+            "sources": [],
             "situation": None,
         }
         statuses = []

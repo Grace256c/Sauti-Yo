@@ -17,16 +17,62 @@ import {
 
 import { apiRequest, ApiError } from "../../services/api";
 
+type LegalSource = {
+  title: string;
+  version_date?: string | null;
+  jurisdiction?: string | null;
+  category?: string | null;
+  pages: number[];
+};
+
 type Message = {
   id: number;
   role: "user" | "assistant";
   text: string;
+  sources?: LegalSource[];
+  hasVerifiedSources?: boolean;
+};
+
+const formatSourceDate = (
+  value?: string | null,
+) => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+};
+
+const formatSourcePages = (pages: number[]) => {
+  if (!pages.length) {
+    return null;
+  }
+
+  const displayPages = pages.map(
+    (page) => page + 1,
+  );
+
+  return displayPages.length === 1
+    ? `Page ${displayPages[0]}`
+    : `Pages ${displayPages.join(", ")}`;
 };
 
 type ChatResponse = {
   matched: boolean;
   reply?: string;
   message?: string;
+  sources?: LegalSource[];
+  has_verified_sources?: boolean;
   situation?: {
     slug: string;
     title: string;
@@ -120,6 +166,9 @@ export default function ChatWidget() {
           id: Date.now() + 1,
           role: "assistant",
           text: assistantText,
+          sources: data.sources ?? [],
+          hasVerifiedSources:
+            data.has_verified_sources ?? false,
         },
       ]);
     } catch (error) {
@@ -255,7 +304,67 @@ export default function ChatWidget() {
                       `
                   }
                 >
-                  {message.text}
+                  <div>{message.text}</div>
+
+                  {message.role === "assistant" &&
+                    message.hasVerifiedSources &&
+                    message.sources &&
+                    message.sources.length > 0 && (
+                      <div className="mt-3 border-t border-border pt-3">
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-text-primary">
+                            Verified legal sources
+                          </p>
+
+                          <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-semibold text-gold-deep">
+                            Source-backed
+                          </span>
+                        </div>
+
+                        <div className="space-y-2">
+                          {message.sources.map(
+                            (source, index) => {
+                              const version =
+                                formatSourceDate(
+                                  source.version_date,
+                                );
+                              const pages =
+                                formatSourcePages(
+                                  source.pages,
+                                );
+
+                              return (
+                                <div
+                                  key={`${source.title}-${index}`}
+                                  className="rounded-lg bg-background/70 px-3 py-2"
+                                >
+                                  <p className="text-xs font-medium text-text-primary">
+                                    {source.title}
+                                  </p>
+
+                                  <p className="mt-1 text-[11px] leading-4 text-text-secondary">
+                                    {[
+                                      source.jurisdiction,
+                                      version
+                                        ? `Version ${version}`
+                                        : null,
+                                      pages,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </p>
+                                </div>
+                              );
+                            },
+                          )}
+                        </div>
+
+                        <p className="mt-2 text-[10px] leading-4 text-text-secondary">
+                          Sauti Yo provides legal information and practical guidance,
+                          not legal representation or personalised legal advice.
+                        </p>
+                      </div>
+                    )}
                 </div>
               </div>
             ))}

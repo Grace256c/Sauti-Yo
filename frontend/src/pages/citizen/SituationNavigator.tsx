@@ -22,6 +22,14 @@ import {
   analyseRightsConcern,
 } from "../../services/rights";
 
+import {
+  getLegalGuidance,
+} from "../../services/legalGuidance";
+
+import type {
+  LegalGuidanceResponse,
+} from "../../services/legalGuidance";
+
 import type {
   ConcernAnalysisResponse,
 } from "../../services/rights";
@@ -33,6 +41,8 @@ export default function SituationNavigator() {
     useState<ConcernAnalysisResponse | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const [error, setError] = useState("");
+  const [legalGuidance, setLegalGuidance] =
+    useState<LegalGuidanceResponse | null>(null);
 
   const handleAnalyse = async (
     event: FormEvent<HTMLFormElement>,
@@ -51,12 +61,33 @@ export default function SituationNavigator() {
 
     setAnalysing(true);
     setError("");
+    setLegalGuidance(null);
 
     try {
       const response =
         await analyseRightsConcern(cleanedConcern);
 
       setResult(response);
+
+      if (response.matched && response.situation?.slug) {
+        try {
+          const guidance = await getLegalGuidance(
+            cleanedConcern,
+            response.situation.slug,
+          );
+
+          setLegalGuidance(guidance);
+        } catch (guidanceError) {
+          console.error(
+            "Source-grounded guidance error:",
+            guidanceError,
+          );
+
+          // The deterministic Rights Navigator remains usable
+          // even when the optional RAG explanation is unavailable.
+          setLegalGuidance(null);
+        }
+      }
     } catch {
       setResult(null);
       setError(
@@ -70,6 +101,7 @@ export default function SituationNavigator() {
   const handleResetAnalysis = () => {
     setConcern("");
     setResult(null);
+    setLegalGuidance(null);
     setError("");
 
     window.scrollTo({
@@ -326,6 +358,92 @@ export default function SituationNavigator() {
                       ))}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* SOURCE-GROUNDED GUIDANCE */}
+              {legalGuidance?.reply && (
+                <div className="mt-8 border border-gold/30 bg-gold/5 p-6 sm:p-8">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
+                        Source-grounded guidance
+                      </p>
+
+                      <h2 className="heading-serif mt-3 text-2xl font-semibold text-text-primary sm:text-3xl">
+                        What this may mean for you
+                      </h2>
+                    </div>
+
+                    {legalGuidance.has_verified_sources && (
+                      <span className="border border-gold/40 bg-surface px-3 py-2 text-xs font-semibold text-gold-deep dark:text-gold">
+                        Verified sources used
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-text-primary sm:text-base">
+                    {legalGuidance.reply}
+                  </div>
+
+                  {legalGuidance.has_verified_sources &&
+                    legalGuidance.sources &&
+                    legalGuidance.sources.length > 0 && (
+                      <div className="mt-6 border-t border-gold/20 pt-5">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-gold-deep dark:text-gold">
+                          Sources used for this explanation
+                        </p>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {legalGuidance.sources.map(
+                            (source, index) => (
+                              <article
+                                key={`${source.title}-${index}`}
+                                className="border border-border bg-surface p-4"
+                              >
+                                <h3 className="text-sm font-semibold text-text-primary">
+                                  {source.title}
+                                </h3>
+
+                                <div className="mt-2 space-y-1 text-xs leading-5 text-text-secondary">
+                                  {source.jurisdiction && (
+                                    <p>
+                                      Jurisdiction:{" "}
+                                      {source.jurisdiction}
+                                    </p>
+                                  )}
+
+                                  {source.version_date && (
+                                    <p>
+                                      Version:{" "}
+                                      {source.version_date}
+                                    </p>
+                                  )}
+
+                                  {source.pages.length > 0 && (
+                                    <p>
+                                      Relevant PDF pages:{" "}
+                                      {source.pages
+                                        .map(
+                                          (page) =>
+                                            page + 1,
+                                        )
+                                        .join(", ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </article>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  <p className="mt-5 border-t border-gold/20 pt-4 text-xs leading-5 text-text-secondary">
+                    This explanation provides legal information and practical
+                    guidance. It is not legal representation or personalised
+                    legal advice.
+                  </p>
                 </div>
               )}
 
