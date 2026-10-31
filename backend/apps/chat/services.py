@@ -51,6 +51,41 @@ def build_semantic_legal_context(documents) -> str:
     return "\n\n".join(passages)
 
 
+def retrieve_semantic_legal_context(
+    query: str,
+    *,
+    k: int = 5,
+) -> str:
+    """Retrieve verified semantic legal context without breaking chat fallback.
+
+    Semantic retrieval improves legal grounding, but it is an enhancement to
+    the existing Sauti Yo verified-data flow. If the vector store, embeddings,
+    or retrieval service is unavailable, the chat can continue using its
+    existing structured legal and practical guidance.
+    """
+
+    query = (query or "").strip()
+
+    if not query:
+        return ""
+
+    try:
+        documents = search_legal_sources(
+            query,
+            k=k,
+            include_neighbors=True,
+        )
+    except Exception:
+        logger.warning(
+            "Semantic legal retrieval failed; "
+            "continuing with existing verified guidance.",
+            exc_info=True,
+        )
+        return ""
+
+    return build_semantic_legal_context(documents)
+
+
 SLUG_ALIASES = {
     "land-property": "facing-eviction",
     "home-safety": "domestic-violence",
