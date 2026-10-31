@@ -45,3 +45,5 @@ credentials.json
 
 # Claude Code local worktrees
 .claude/worktrees/
+# Generated legal RAG vector index
+backend/data/legal_vector_store/
