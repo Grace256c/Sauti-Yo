@@ -781,6 +781,8 @@ def build_chat_response(
         return {
             "matched": True,
             "reply": ai_reply,
+            "sources": sources,
+            "has_verified_sources": bool(sources),
             "situation": (
                 {
                     "slug": detail["slug"],
