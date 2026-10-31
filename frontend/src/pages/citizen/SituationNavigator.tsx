@@ -361,6 +361,39 @@ export default function SituationNavigator() {
                 </div>
               )}
 
+              {/* SOURCE-GROUNDED GUIDANCE */}
+              {legalGuidance?.reply && (
+                <div className="mt-8 border border-gold/30 bg-gold/5 p-6 sm:p-8">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-deep dark:text-gold">
+                        Source-grounded guidance
+                      </p>
+
+                      <h2 className="heading-serif mt-3 text-2xl font-semibold text-text-primary sm:text-3xl">
+                        What this may mean for you
+                      </h2>
+                    </div>
+
+                    {legalGuidance.has_verified_sources && (
+                      <span className="border border-gold/40 bg-surface px-3 py-2 text-xs font-semibold text-gold-deep dark:text-gold">
+                        Verified sources used
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="mt-5 whitespace-pre-wrap text-sm leading-7 text-text-primary sm:text-base">
+                    {legalGuidance.reply}
+                  </div>
+
+                  <p className="mt-5 border-t border-gold/20 pt-4 text-xs leading-5 text-text-secondary">
+                    This explanation provides legal information and practical
+                    guidance. It is not legal representation or personalised
+                    legal advice.
+                  </p>
+                </div>
+              )}
+
               {/* RIGHTS SUMMARY */}
               <div className="mt-10 grid gap-10 lg:grid-cols-[0.72fr_1.28fr] lg:gap-20">
                 <div>
