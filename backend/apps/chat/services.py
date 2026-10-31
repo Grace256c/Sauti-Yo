@@ -14,6 +14,43 @@ from apps.rights.rag.vector_store import search_legal_sources
 logger = logging.getLogger(__name__)
 
 
+def build_semantic_legal_context(documents) -> str:
+    """Format verified RAG documents for grounded chat generation.
+
+    Each passage includes its legal source metadata so the language model can
+    distinguish laws, versions, and PDF pages while answering the citizen.
+    """
+
+    if not documents:
+        return ""
+
+    passages = []
+
+    for number, document in enumerate(documents, start=1):
+        metadata = document.metadata
+
+        title = metadata.get("title", "Unknown legal source")
+        version_date = metadata.get("version_date", "unknown")
+        page = metadata.get("page", "unknown")
+        category = metadata.get("category", "legal_information")
+
+        passages.append(
+            "\n".join(
+                [
+                    f"[Verified legal source {number}]",
+                    f"Law: {title}",
+                    f"Version: {version_date}",
+                    f"PDF page: {page}",
+                    f"Category: {category}",
+                    "Legal text:",
+                    document.page_content.strip(),
+                ]
+            )
+        )
+
+    return "\n\n".join(passages)
+
+
 SLUG_ALIASES = {
     "land-property": "facing-eviction",
     "home-safety": "domestic-violence",
