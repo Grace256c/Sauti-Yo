@@ -179,22 +179,27 @@ def search_legal_sources(
     documents = []
     seen = set()
 
-    for match in matches:
-        candidates = [match, *_load_neighboring_pages(match)]
+    # Keep every semantic match, but expand full neighbouring pages only
+    # around the strongest match. Expanding every match can pull a large
+    # range of loosely related statutory pages into one answer.
+    candidates = list(matches)
 
-        for candidate in candidates:
-            metadata = candidate.metadata
+    if matches:
+        candidates.extend(_load_neighboring_pages(matches[0]))
 
-            identity = (
-                metadata.get("filename"),
-                metadata.get("page"),
-                candidate.page_content,
-            )
+    for candidate in candidates:
+        metadata = candidate.metadata
 
-            if identity in seen:
-                continue
+        identity = (
+            metadata.get("filename"),
+            metadata.get("page"),
+            candidate.page_content,
+        )
 
-            seen.add(identity)
-            documents.append(candidate)
+        if identity in seen:
+            continue
+
+        seen.add(identity)
+        documents.append(candidate)
 
     return documents
