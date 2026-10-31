@@ -548,7 +548,7 @@ IMPORTANT RULES:
 
     try:
         response = client.responses.create(
-            model="gpt-5-mini",
+            model=settings.LLM_MODEL or "gpt-4.1-mini",
             instructions=instructions,
             input=message,
         )
