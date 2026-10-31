@@ -26,6 +26,12 @@ LEGAL_SOURCES = [
         "category": "employment_rights",
         "version_date": "2026-06-05",
     },
+    {
+        "filename": "uganda_domestic_violence_act_2023.pdf",
+        "title": "Domestic Violence Act, Chapter 123",
+        "category": "domestic_violence",
+        "version_date": "2023-12-31",
+    },
 ]
 
 
