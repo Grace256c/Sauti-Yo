@@ -497,7 +497,7 @@ def generate_ai_reply(
     # primary-law PDFs. Failure here does not interrupt chat.
     semantic_evidence = retrieve_semantic_legal_evidence(
         message,
-        k=5,
+        k=3,
     )
     semantic_legal_context = semantic_evidence["context"]
     semantic_sources = semantic_evidence["sources"]
