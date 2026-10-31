@@ -473,3 +473,68 @@ class ConcernAnalysisTests(TestCase):
             response.status_code,
             400,
         )
+
+
+class LegalRetrievalTests(TestCase):
+    """Regression coverage for focused semantic legal retrieval."""
+
+    def test_neighbor_pages_expand_only_strongest_semantic_match(self):
+        from unittest.mock import Mock, patch
+
+        from langchain_core.documents import Document
+
+        from apps.rights.rag.vector_store import search_legal_sources
+
+        strongest = Document(
+            page_content="Section 65 hearing before dismissal.",
+            metadata={
+                "filename": "employment.pdf",
+                "page": 34,
+            },
+        )
+        secondary = Document(
+            page_content="Section 69 summary dismissal.",
+            metadata={
+                "filename": "employment.pdf",
+                "page": 37,
+            },
+        )
+        neighbor = Document(
+            page_content="Section 65 complaint deadline.",
+            metadata={
+                "filename": "employment.pdf",
+                "page": 35,
+            },
+        )
+
+        vector_store = Mock()
+        vector_store.similarity_search.return_value = [
+            strongest,
+            secondary,
+        ]
+
+        with (
+            patch(
+                "apps.rights.rag.vector_store.load_vector_store",
+                return_value=vector_store,
+            ),
+            patch(
+                "apps.rights.rag.vector_store._load_neighboring_pages",
+                return_value=[neighbor],
+            ) as load_neighbors,
+        ):
+            documents = search_legal_sources(
+                "dismissed without a hearing",
+                k=2,
+                include_neighbors=True,
+            )
+
+        self.assertEqual(
+            [document.metadata["page"] for document in documents],
+            [34, 37, 35],
+        )
+        load_neighbors.assert_called_once_with(strongest)
+        vector_store.similarity_search.assert_called_once_with(
+            "dismissed without a hearing",
+            k=2,
+        )
