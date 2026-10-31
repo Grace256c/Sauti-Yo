@@ -386,6 +386,59 @@ export default function SituationNavigator() {
                     {legalGuidance.reply}
                   </div>
 
+                  {legalGuidance.has_verified_sources &&
+                    legalGuidance.sources &&
+                    legalGuidance.sources.length > 0 && (
+                      <div className="mt-6 border-t border-gold/20 pt-5">
+                        <p className="text-xs font-bold uppercase tracking-[0.14em] text-gold-deep dark:text-gold">
+                          Sources used for this explanation
+                        </p>
+
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          {legalGuidance.sources.map(
+                            (source, index) => (
+                              <article
+                                key={`${source.title}-${index}`}
+                                className="border border-border bg-surface p-4"
+                              >
+                                <h3 className="text-sm font-semibold text-text-primary">
+                                  {source.title}
+                                </h3>
+
+                                <div className="mt-2 space-y-1 text-xs leading-5 text-text-secondary">
+                                  {source.jurisdiction && (
+                                    <p>
+                                      Jurisdiction:{" "}
+                                      {source.jurisdiction}
+                                    </p>
+                                  )}
+
+                                  {source.version_date && (
+                                    <p>
+                                      Version:{" "}
+                                      {source.version_date}
+                                    </p>
+                                  )}
+
+                                  {source.pages.length > 0 && (
+                                    <p>
+                                      Relevant PDF pages:{" "}
+                                      {source.pages
+                                        .map(
+                                          (page) =>
+                                            page + 1,
+                                        )
+                                        .join(", ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </article>
+                            ),
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                   <p className="mt-5 border-t border-gold/20 pt-4 text-xs leading-5 text-text-secondary">
                     This explanation provides legal information and practical
                     guidance. It is not legal representation or personalised
