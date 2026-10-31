@@ -33,6 +33,40 @@ type Message = {
   hasVerifiedSources?: boolean;
 };
 
+const formatSourceDate = (
+  value?: string | null,
+) => {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+};
+
+const formatSourcePages = (pages: number[]) => {
+  if (!pages.length) {
+    return null;
+  }
+
+  const displayPages = pages.map(
+    (page) => page + 1,
+  );
+
+  return displayPages.length === 1
+    ? `Page ${displayPages[0]}`
+    : `Pages ${displayPages.join(", ")}`;
+};
+
 type ChatResponse = {
   matched: boolean;
   reply?: string;
