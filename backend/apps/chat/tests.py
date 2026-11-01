@@ -291,6 +291,46 @@ class GenerateAiReplyTests(TestCase):
             k=3,
         )
 
+    def test_rejects_unverified_ai_phone_number(self):
+        """Reject contact details absent from verified guidance."""
+        self.mock_client.responses.create.return_value.output_text = (
+            "Call the helpline at 0800 199 195."
+        )
+
+        with self.assertLogs(
+            "apps.chat.services", level="WARNING"
+        ) as captured:
+            result = services.generate_ai_reply(
+                "I need help",
+                None,
+            )
+
+        self.assertIsNone(result)
+        self.assertTrue(
+            any(
+                "unverified contact numbers" in message
+                for message in captured.output
+            )
+        )
+
+    def test_accepts_verified_phone_with_different_spacing(self):
+        """Compare phone numbers independently of spacing."""
+        self.mock_client.responses.create.return_value.output_text = (
+            "Call 0800 199 195 for assistance."
+        )
+
+        with patch(
+            "apps.chat.services.build_context",
+            return_value="Verified contact: 0800199195",
+        ):
+            result = services.generate_ai_reply(
+                "I need help",
+                None,
+            )
+
+        self.assertIsNotNone(result)
+        self.assertIn("0800 199 195", result["reply"])
+
     def test_returns_none_when_reply_is_empty(self):
         self.mock_client.responses.create.return_value.output_text = "   "
         result = services.generate_ai_reply("what are my rights", None)
