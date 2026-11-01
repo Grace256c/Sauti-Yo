@@ -592,3 +592,38 @@ class LegalRetrievalWithoutNeighborsTests(TestCase):
             [34, 37],
         )
         load_neighbors.assert_not_called()
+
+
+from django.test import TestCase
+from apps.rights.models import Situation
+from apps.rights.services import analyse_concern
+
+
+
+class DomesticViolenceNaturalLanguageTests(TestCase):
+    """Check natural descriptions of domestic abuse."""
+
+    def setUp(self):
+        Situation.objects.get_or_create(
+            slug="domestic-violence",
+            defaults={
+                "title": "Domestic violence",
+                "risk_level": "high",
+            },
+        )
+
+    def test_partner_threats_and_financial_control(self):
+        result = analyse_concern(
+            "My partner threatens me and controls my money."
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["situation"]["slug"], "domestic-violence"
+        )
+
+    def test_husband_abuse(self):
+        result = analyse_concern("My husband abuses me at home.")
+        self.assertIsNotNone(result)
+        self.assertEqual(
+            result["situation"]["slug"], "domestic-violence"
+        )
