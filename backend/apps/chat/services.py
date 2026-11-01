@@ -650,6 +650,36 @@ IMPORTANT RULES:
         if not reply:
             return None
 
+        # Do not publish contact numbers absent from reviewed guidance.
+        import re
+
+        supplied_contacts = set(
+            re.findall(
+                r"(?<!\d)0[\d\s-]{8,16}(?!\d)",
+                practical_context or "",
+            )
+        )
+
+        generated_contacts = set(
+            re.findall(
+                r"(?<!\d)0[\d\s-]{8,16}(?!\d)",
+                reply,
+            )
+        )
+
+        normalise = lambda number: re.sub(r"\D", "", number)
+
+        allowed = {normalise(n) for n in supplied_contacts}
+
+        if any(
+            normalise(number) not in allowed
+            for number in generated_contacts
+        ):
+            logger.warning(
+                "AI response contained unverified contact numbers"
+            )
+            return None
+
         return {
             "reply": reply,
             "sources": semantic_sources,
