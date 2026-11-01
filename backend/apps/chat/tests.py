@@ -288,7 +288,7 @@ class GenerateAiReplyTests(TestCase):
         )
         self.mock_semantic_retrieval.assert_called_once_with(
             "what are my rights",
-            k=5,
+            k=3,
         )
 
     def test_returns_none_when_reply_is_empty(self):
