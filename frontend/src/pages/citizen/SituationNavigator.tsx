@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   type FormEvent,
+  useRef,
   useState,
 } from "react";
 import { Link } from "react-router-dom";
@@ -37,6 +38,7 @@ import type {
 
 export default function SituationNavigator() {
   const [concern, setConcern] = useState("");
+  const requestVersion = useRef(0);
   const [result, setResult] =
     useState<ConcernAnalysisResponse | null>(null);
   const [analysing, setAnalysing] = useState(false);
@@ -59,13 +61,18 @@ export default function SituationNavigator() {
       return;
     }
 
+    const currentRequest = ++requestVersion.current;
+
     setAnalysing(true);
     setError("");
+    setResult(null);
     setLegalGuidance(null);
 
     try {
       const response =
         await analyseRightsConcern(cleanedConcern);
+
+      if (currentRequest !== requestVersion.current) return;
 
       setResult(response);
 
@@ -76,8 +83,12 @@ export default function SituationNavigator() {
             response.situation.slug,
           );
 
-          setLegalGuidance(guidance);
+          if (currentRequest === requestVersion.current) {
+            setLegalGuidance(guidance);
+          }
         } catch (guidanceError) {
+          if (currentRequest !== requestVersion.current) return;
+
           console.error(
             "Source-grounded guidance error:",
             guidanceError,
@@ -89,16 +100,22 @@ export default function SituationNavigator() {
         }
       }
     } catch {
+      if (currentRequest !== requestVersion.current) return;
+
       setResult(null);
       setError(
         "We could not analyse your concern right now. You can still choose the closest category below.",
       );
     } finally {
-      setAnalysing(false);
+      if (currentRequest === requestVersion.current) {
+        setAnalysing(false);
+      }
     }
   };
 
   const handleResetAnalysis = () => {
+    requestVersion.current += 1;
+    setAnalysing(false);
     setConcern("");
     setResult(null);
     setLegalGuidance(null);
@@ -220,7 +237,11 @@ export default function SituationNavigator() {
                 id="citizen-concern"
                 value={concern}
                 onChange={(event) => {
+                  requestVersion.current += 1;
                   setConcern(event.target.value);
+                  setResult(null);
+                  setLegalGuidance(null);
+                  setAnalysing(false);
 
                   if (error) {
                     setError("");
@@ -375,9 +396,10 @@ export default function SituationNavigator() {
                       </h2>
                     </div>
 
-                    {legalGuidance.has_verified_sources && (
+                    {legalGuidance.sources &&
+                    legalGuidance.sources.length > 0 && (
                       <span className="border border-gold/40 bg-surface px-3 py-2 text-xs font-semibold text-gold-deep dark:text-gold">
-                        Verified sources used
+                        Legal sources retrieved
                       </span>
                     )}
                   </div>
@@ -598,6 +620,47 @@ export default function SituationNavigator() {
                             {service.phone_number}
                           </p>
                         )}
+
+                        {(() => {
+                          const now = new Date();
+                          const today = [
+                            now.getFullYear(),
+                            String(now.getMonth() + 1).padStart(2, "0"),
+                            String(now.getDate()).padStart(2, "0"),
+                          ].join("-");
+
+                          const markedVerified =
+                            service.verification_status === "verified";
+
+                          const overdue =
+                            markedVerified &&
+                            !!service.next_verification_due &&
+                            service.next_verification_due < today;
+
+                          const verified =
+                            markedVerified &&
+                            !!service.last_verified &&
+                            service.last_verified <= today &&
+                            !overdue;
+
+                          const verificationLabel = overdue
+                            ? "Verification overdue"
+                            : verified
+                              ? "Verified contact"
+                              : "Contact details not yet verified";
+
+                          return (
+                            <p className="mt-3 text-xs leading-5 text-text-secondary">
+                              {verificationLabel}
+                              {verified && (
+                                <span>
+                                  {" · Last checked: "}
+                                  {service.last_verified}
+                                </span>
+                              )}
+                            </p>
+                          );
+                        })()}
 
                         {service.is_emergency_service && (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary">

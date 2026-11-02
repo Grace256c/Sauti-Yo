@@ -147,6 +147,9 @@ export interface ConcernAnalysisResponse {
         name: string;
         phone_number: string;
         is_emergency_service: boolean;
+        verification_status: string;
+        last_verified: string | null;
+        next_verification_due: string | null;
       }>;
       legal_provisions: Array<{
         source_type: string;
