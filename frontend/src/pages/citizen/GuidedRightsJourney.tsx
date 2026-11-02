@@ -18,14 +18,21 @@ import {
 
 export default function GuidedRightsJourney() {
   const { category } = useParams();
-  const navigate = useNavigate();
-
   const journey = getRightsCategory(category);
 
   if (!journey) {
     return <Navigate to="/rights" replace />;
   }
 
+  return <GuidedJourneyContent key={journey.slug} journey={journey} />;
+}
+
+function GuidedJourneyContent({
+  journey,
+}: {
+  journey: NonNullable<ReturnType<typeof getRightsCategory>>;
+}) {
+  const navigate = useNavigate();
   const Icon = journey.icon;
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
