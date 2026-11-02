@@ -396,9 +396,10 @@ export default function SituationNavigator() {
                       </h2>
                     </div>
 
-                    {legalGuidance.has_verified_sources && (
+                    {legalGuidance.sources &&
+                    legalGuidance.sources.length > 0 && (
                       <span className="border border-gold/40 bg-surface px-3 py-2 text-xs font-semibold text-gold-deep dark:text-gold">
-                        Verified sources used
+                        Legal sources retrieved
                       </span>
                     )}
                   </div>
@@ -619,6 +620,47 @@ export default function SituationNavigator() {
                             {service.phone_number}
                           </p>
                         )}
+
+                        {(() => {
+                          const now = new Date();
+                          const today = [
+                            now.getFullYear(),
+                            String(now.getMonth() + 1).padStart(2, "0"),
+                            String(now.getDate()).padStart(2, "0"),
+                          ].join("-");
+
+                          const markedVerified =
+                            service.verification_status === "verified";
+
+                          const overdue =
+                            markedVerified &&
+                            !!service.next_verification_due &&
+                            service.next_verification_due < today;
+
+                          const verified =
+                            markedVerified &&
+                            !!service.last_verified &&
+                            service.last_verified <= today &&
+                            !overdue;
+
+                          const verificationLabel = overdue
+                            ? "Verification overdue"
+                            : verified
+                              ? "Verified contact"
+                              : "Contact details not yet verified";
+
+                          return (
+                            <p className="mt-3 text-xs leading-5 text-text-secondary">
+                              {verificationLabel}
+                              {verified && (
+                                <span>
+                                  {" · Last checked: "}
+                                  {service.last_verified}
+                                </span>
+                              )}
+                            </p>
+                          );
+                        })()}
 
                         {service.is_emergency_service && (
                           <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary">
