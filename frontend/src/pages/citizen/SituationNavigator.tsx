@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import {
   type FormEvent,
+  useRef,
   useState,
 } from "react";
 import { Link } from "react-router-dom";
@@ -37,6 +38,7 @@ import type {
 
 export default function SituationNavigator() {
   const [concern, setConcern] = useState("");
+  const requestVersion = useRef(0);
   const [result, setResult] =
     useState<ConcernAnalysisResponse | null>(null);
   const [analysing, setAnalysing] = useState(false);
@@ -59,13 +61,18 @@ export default function SituationNavigator() {
       return;
     }
 
+    const currentRequest = ++requestVersion.current;
+
     setAnalysing(true);
     setError("");
+    setResult(null);
     setLegalGuidance(null);
 
     try {
       const response =
         await analyseRightsConcern(cleanedConcern);
+
+      if (currentRequest !== requestVersion.current) return;
 
       setResult(response);
 
@@ -76,8 +83,12 @@ export default function SituationNavigator() {
             response.situation.slug,
           );
 
-          setLegalGuidance(guidance);
+          if (currentRequest === requestVersion.current) {
+            setLegalGuidance(guidance);
+          }
         } catch (guidanceError) {
+          if (currentRequest !== requestVersion.current) return;
+
           console.error(
             "Source-grounded guidance error:",
             guidanceError,
@@ -89,16 +100,22 @@ export default function SituationNavigator() {
         }
       }
     } catch {
+      if (currentRequest !== requestVersion.current) return;
+
       setResult(null);
       setError(
         "We could not analyse your concern right now. You can still choose the closest category below.",
       );
     } finally {
-      setAnalysing(false);
+      if (currentRequest === requestVersion.current) {
+        setAnalysing(false);
+      }
     }
   };
 
   const handleResetAnalysis = () => {
+    requestVersion.current += 1;
+    setAnalysing(false);
     setConcern("");
     setResult(null);
     setLegalGuidance(null);
@@ -220,7 +237,11 @@ export default function SituationNavigator() {
                 id="citizen-concern"
                 value={concern}
                 onChange={(event) => {
+                  requestVersion.current += 1;
                   setConcern(event.target.value);
+                  setResult(null);
+                  setLegalGuidance(null);
+                  setAnalysing(false);
 
                   if (error) {
                     setError("");
