@@ -125,6 +125,31 @@ class RightsServicesTests(TestCase):
             "Section 10",
         )
 
+    def test_situation_detail_includes_verified_support_contact_metadata(self):
+        from datetime import date
+
+        self.support_service.verification_status = "verified"
+        self.support_service.last_verified = date(2026, 10, 15)
+        self.support_service.next_verification_due = date(2027, 1, 15)
+        self.support_service.save()
+
+        detail = get_situation_detail("home-safety")
+        contact = detail["rights_topics"][0]["support_services"][0]
+
+        self.assertEqual(contact["verification_status"], "verified")
+        self.assertEqual(contact["last_verified"], "2026-10-15")
+        self.assertEqual(contact["next_verification_due"], "2027-01-15")
+        self.assertEqual(contact["phone_number"], "116")
+
+    def test_situation_detail_preserves_unreviewed_contact_metadata(self):
+        detail = get_situation_detail("home-safety")
+        contact = detail["rights_topics"][0]["support_services"][0]
+
+        self.assertEqual(contact["verification_status"], "review_required")
+        self.assertIsNone(contact["last_verified"])
+        self.assertIsNone(contact["next_verification_due"])
+        self.assertEqual(contact["phone_number"], "116")
+
     def test_get_situation_detail_returns_none_for_missing_slug(self):
         self.assertIsNone(get_situation_detail("does-not-exist"))
 

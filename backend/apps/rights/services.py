@@ -64,6 +64,15 @@ def get_situation_detail(slug):
                     "name": s.name,
                     "phone_number": s.phone_number,
                     "is_emergency_service": s.is_emergency_service,
+                    "verification_status": s.verification_status,
+                    "last_verified": (
+                        s.last_verified.isoformat()
+                        if s.last_verified else None
+                    ),
+                    "next_verification_due": (
+                        s.next_verification_due.isoformat()
+                        if s.next_verification_due else None
+                    ),
                 }
                 for s in topic.support_services.filter(is_active=True)
             ],
