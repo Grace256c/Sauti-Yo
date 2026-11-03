@@ -47,3 +47,8 @@ credentials.json
 .claude/worktrees/
 # Generated legal RAG vector index
 backend/data/legal_vector_store/
+
+# Generated production frontend assets
+/backend/static/frontend/
+/backend/staticfiles/
+/backend/templates/index.html
