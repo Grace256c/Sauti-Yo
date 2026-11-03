@@ -5,7 +5,8 @@ URL configuration for the Sauti Yo project.
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.generic import TemplateView
 
 
 urlpatterns = [
@@ -53,6 +54,18 @@ urlpatterns = [
     include("apps.chat.urls"),
 ),
 ]
+
+
+# Serve frontend pages through Django in production.
+# API, admin, static and media URLs are excluded.
+if not settings.DEBUG:
+    urlpatterns += [
+        re_path(
+            r"^(?!(?:api|admin|static|media)(?:/|$)).*$",
+            TemplateView.as_view(template_name="index.html"),
+            name="react-app",
+        ),
+    ]
 
 
 if settings.DEBUG:
